@@ -19,7 +19,7 @@ HarmoniaCore provides a clean, testable audio playback API following hexagonal a
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/YOUR_USERNAME/HarmoniaCore.git", from: "0.1.0")
+    .package(url: "https://github.com/OneOfWolvesBilly/HarmoniaCore.git", from: "0.1.0")
 ]
 ```
 
@@ -182,9 +182,9 @@ Copyright (c) 2025 Chih-hao (Billy) Chen
 
 ## Contact
 
-- GitHub: [@YOUR_USERNAME](https://github.com/YOUR_USERNAME)
-- Project: [HarmoniaCore](https://github.com/YOUR_USERNAME/HarmoniaCore)
+- GitHub: [@OneOfWolvesBilly](https://github.com/OneOfWolvesBilly)
+- Project: [HarmoniaCore](https://github.com/OneOfWolvesBilly/HarmoniaCore)
 
 ---
 
-**Building a music player?** Check out [HarmoniaPlayer](https://github.com/YOUR_USERNAME/HarmoniaPlayer) - a reference SwiftUI app using HarmoniaCore.
+**Building a music player?** Check out [HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer) - a reference SwiftUI app using HarmoniaCore.
