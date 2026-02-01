@@ -162,10 +162,6 @@ public final class SandboxFileAccessAdapter: FileAccessPort {
 }
 ```
 
-**Thread Safety:** Internal locking ensures thread-safe access to file handles.
-
----
-
 ## AVAssetReaderDecoderAdapter : DecoderPort
 
 Uses `AVAssetReader` to decode audio files to interleaved Float32 PCM.
@@ -177,6 +173,100 @@ See actual source code for complete implementation.
 - Supports: MP3, AAC, ALAC, WAV, AIFF, CAF
 - Output: Interleaved Float32 PCM in range [-1.0, 1.0]
 - Thread-safe: Safe to use on background threads
+- **Security-scoped resource handling**: Automatically manages file access permissions for sandboxed macOS apps
+
+---
+
+### Security-Scoped Resource Implementation
+
+**Overview:**
+On macOS with App Sandbox enabled, accessing files selected by the user through `.fileImporter` or `NSOpenPanel` requires explicit permission handling. The adapter automatically manages this through `startAccessingSecurityScopedResource()` and `stopAccessingSecurityScopedResource()`.
+
+**Implementation Details:**
+
+```swift
+private struct State: Sendable {
+    let url: URL
+    let asset: AVAsset
+    let track: AVAssetTrack
+    let reader: AVAssetReader
+    let output: AVAssetReaderTrackOutput
+    let duration: Double
+    let sampleRate: Double
+    let channels: Int
+    let bitDepth: Int
+    let isAccessingSecurityScopedResource: Bool  // NEW: Track resource state
+}
+```
+
+**In `open()` method:**
+
+```swift
+private func openAsync(asset: AVAsset, url: URL) async throws -> DecodeHandle {
+    // Start accessing security-scoped resource (macOS sandbox)
+    let didStartAccessing = url.startAccessingSecurityScopedResource()
+    
+    if !didStartAccessing {
+        logger.warn("Failed to start accessing security-scoped resource: \(url.path)")
+        // Continue anyway - may work in non-sandbox environments
+    }
+    
+    do {
+        // ... decode setup code ...
+        
+        let state = State(
+            url: url,
+            // ... other fields ...
+            isAccessingSecurityScopedResource: didStartAccessing
+        )
+        
+        return DecodeHandle(id: id)
+        
+    } catch {
+        // IMPORTANT: Stop accessing on error
+        if didStartAccessing {
+            url.stopAccessingSecurityScopedResource()
+        }
+        throw error
+    }
+}
+```
+
+**In `close()` method:**
+
+```swift
+public func close(_ handle: DecodeHandle) {
+    let removedState = lock.withLock {
+        handles.removeValue(forKey: handle.id)
+    }
+    
+    if let state = removedState {
+        // Stop accessing security-scoped resource if we started it
+        if state.isAccessingSecurityScopedResource {
+            state.url.stopAccessingSecurityScopedResource()
+            logger.debug("Stopped accessing security-scoped resource for [\(handle.id)]")
+        }
+        logger.debug("Decoder close [\(handle.id)]")
+    }
+}
+```
+
+**Why This Matters:**
+
+1. **macOS Sandbox Requirement**: Without this, sandboxed apps get error `-12203` (permission denied) when trying to access user-selected files
+2. **Cross-Environment Compatibility**: Works correctly on:
+   - macOS with App Sandbox enabled (required)
+   - macOS without App Sandbox (harmless no-op)
+   - iOS (harmless no-op, as iOS handles this differently)
+3. **Proper Resource Management**: Ensures resources are released in all code paths, including errors
+
+**Testing Checklist:**
+
+- ✅ User selects file via `.fileImporter` → File opens successfully
+- ✅ Multiple files can be opened simultaneously
+- ✅ `close()` properly releases file access
+- ✅ Error during `open()` doesn't leak resource access
+- ✅ Works on non-sandboxed macOS apps (backward compatible)
 
 ---
 
