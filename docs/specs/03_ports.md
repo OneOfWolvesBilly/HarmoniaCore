@@ -28,6 +28,23 @@ defined here while using idiomatic syntax for their target language.
 
 ---
 
+## Document Structure
+
+Each Port specification contains:
+
+### Core Contract (Normative)
+- Method signatures and return values
+- Error conditions and mapping  
+- Thread safety requirements
+- Observable behavior that MUST be identical across platforms
+
+### Adapter Notes (Non-normative)
+- Implementation guidance is provided in separate adapter implementation documents:
+  - Apple adapters: `docs/impl/02_01_apple_adapters_impl.md`
+  - Linux adapters: `docs/impl/02_02_linux_adapters_impl.md`
+
+---
+
 ## LoggerPort
 
 Provides structured logging for debugging and parity validation.
@@ -91,6 +108,12 @@ Provides platform-neutral file I/O.
 
 ```text
 type FileHandleToken  // opaque handle (implementation-defined)
+
+enum FileSeekOrigin {
+    start    // Seek from beginning of file
+    current  // Seek from current position
+    end      // Seek from end of file
+}
 ```
 
 ### Interface
@@ -99,6 +122,7 @@ type FileHandleToken  // opaque handle (implementation-defined)
 protocol FileAccessPort {
     open(url: String) throws -> FileHandleToken
     read(token: FileHandleToken, buffer: UnsafeMutableRawPointer, count: Int) throws -> Int
+    seek(token: FileHandleToken, offset: Int64, origin: FileSeekOrigin) throws
     size(token: FileHandleToken) throws -> Int64
     close(token: FileHandleToken)
 }
@@ -120,6 +144,18 @@ protocol FileAccessPort {
 - Throws `CoreError.invalidState` if `token` is invalid.
 - Throws `CoreError.ioError` for I/O errors.
 - Thread Safety: Safe to call concurrently with different tokens. Behavior is undefined if called concurrently with the same token.
+
+**seek(token, offset, origin)**
+- Changes the current file position for subsequent read operations.
+- `offset` interpretation depends on `origin`:
+  - `start`: Seek to `offset` bytes from beginning (offset must be ≥ 0)
+  - `current`: Seek `offset` bytes from current position (can be negative)
+  - `end`: Seek to `offset` bytes from end (typically negative)
+- Resulting position must be within [0, file_size].
+- Throws `CoreError.invalidState` if `token` is invalid.
+- Throws `CoreError.invalidArgument` if resulting position is invalid.
+- Throws `CoreError.ioError` for I/O errors.
+- Thread Safety: Undefined if called concurrently with same token.
 
 **size(token)**
 - Returns total size of file in bytes.

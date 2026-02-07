@@ -33,9 +33,9 @@ Describes an audio stream's format and duration.
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
-| `duration` | `Double` | Duration in seconds | `≥ 0.0`, may be `INFINITY` for streams |
+| `duration` | `Double` | Duration in seconds | `â‰¥ 0.0`, may be `INFINITY` for streams |
 | `sampleRate` | `Double` | Sample rate in Hz | Common: 44100.0, 48000.0, 88200.0, 96000.0, 192000.0 |
-| `channels` | `Int` | Number of audio channels | `≥ 1`, typically 1 (mono) or 2 (stereo) |
+| `channels` | `Int` | Number of audio channels | `â‰¥ 1`, typically 1 (mono) or 2 (stereo) |
 | `bitDepth` | `Int` | Bit depth per sample | Common: 16, 24, 32 (for PCM formats) |
 
 ### Semantics
@@ -84,6 +84,27 @@ struct StreamInfo {
 };
 ```
 
+### Parity Requirements
+
+**Exact Match Required:**
+- All fields MUST be identical across platforms for the same file
+- `duration` MUST match within ±0.001 seconds (1ms tolerance for rounding)
+- `sampleRate`, `channels`, `bitDepth` MUST match exactly
+
+**Test Vector Example:**
+```json
+{
+  "operations": [
+    {"type": "load", "args": {"url": "{fixture_dir}/sine_440hz_1s.mp3"}}
+  ],
+  "assertions": [
+    {"type": "duration_equals", "expected": 1.0, "tolerance_ms": 1},
+    {"type": "sample_rate_equals", "expected": 44100.0},
+    {"type": "channels_equals", "expected": 2}
+  ]
+}
+```
+
 ---
 
 ## TagBundle
@@ -109,22 +130,31 @@ Contains metadata tags extracted from or to be written to an audio file.
 - **Optional Fields:**  
   All fields are optional. `nil`/`null`/empty indicates the field is not present in the source file.
 
+- **Nil vs Empty String Rule (CRITICAL FOR PARITY):**  
+  Missing tags MUST be represented as `nil`/`null`, NOT empty string `""`.  
+  Empty string `""` is a valid tag value (e.g., intentionally blank title).  
+  
+  **Examples:**
+  - No title tag in file → `bundle.title = nil` (correct)
+  - No title tag in file → `bundle.title = ""` (WRONG - confuses absence with empty)
+  - File has empty title tag → `bundle.title = ""` (correct - represents actual empty tag)
+
 - **String Encoding:**  
   All strings MUST be UTF-8 encoded.
 
 - **artworkData:**  
   Raw image bytes (typically JPEG or PNG). Implementations SHOULD detect image format from magic bytes.  
-  Size limit: Recommended ≤ 10 MB per file format specifications.
+  Size limit: Recommended â‰¤ 10 MB per file format specifications.
 
 ### Cross-Platform Consistency
 
 - Tag names MUST map consistently across platforms:
-  - ID3v2 `TIT2` → `title`
-  - ID3v2 `TPE1` → `artist`
-  - Vorbis `TITLE` → `title`
-  - Vorbis `ARTIST` → `artist`
-  - MP4 `©nam` → `title`
-  - MP4 `©ART` → `artist`
+  - ID3v2 `TIT2` â†’ `title`
+  - ID3v2 `TPE1` â†’ `artist`
+  - Vorbis `TITLE` â†’ `title`
+  - Vorbis `ARTIST` â†’ `artist`
+  - MP4 `Â©nam` â†’ `title`
+  - MP4 `Â©ART` â†’ `artist`
 
 - Missing tags MUST result in `nil`/`null` fields, NOT empty strings.
 
@@ -164,6 +194,39 @@ struct TagBundle {
 };
 ```
 
+### Parity Requirements
+
+**Exact Match Required:**
+- Text fields (title, artist, album, etc.) MUST match exactly after normalization
+- Numeric fields (year, trackNumber, discNumber) MUST match exactly
+- `nil` vs non-nil status MUST match
+
+**Excluded from Parity:**
+- `artworkData`: Image format conversion allowed (JPEG ↔ PNG)
+
+**Normalization Rules:**
+- Trim leading/trailing whitespace: `" Title "` → `"Title"`
+- Normalize Unicode: NFD ↔ NFC acceptable
+- Case: Preserve as-is (do NOT normalize case)
+
+**Test Vector Example:**
+```json
+{
+  "operations": [
+    {"type": "load", "args": {"url": "{fixture_dir}/tagged.mp3"}},
+    {"type": "read_tags"}
+  ],
+  "assertions": [
+    {"type": "tags_equal", "expected": {
+      "title": "Test Track",
+      "artist": "Test Artist",
+      "album": "Test Album",
+      "year": 2025
+    }}
+  ]
+}
+```
+
 ---
 
 ## CoreError
@@ -185,7 +248,7 @@ Unified error enumeration for all recoverable errors in HarmoniaCore.
 
 - **invalidArgument:**  
   User provided invalid input. Should include parameter name and reason.  
-  Example: `"Invalid seek position: -5.0 (must be ≥ 0)"`
+  Example: `"Invalid seek position: -5.0 (must be â‰¥ 0)"`
 
 - **invalidState:**  
   Operation is valid but not allowed in current state. Should describe expected state.  
@@ -278,6 +341,38 @@ public:
 };
 ```
 
+### Parity Requirements
+
+**Exact Match Required:**
+- Error **type** (category) MUST be identical for same inputs across platforms
+- Example: Both platforms throw `invalidArgument` for negative seek position
+
+**Flexible:**
+- Error **message** content (can vary by platform)
+- Example:
+  - Swift: `"Invalid seek position: -5.0 (must be ≥ 0)"`
+  - C++: `"Seek position must be non-negative, got -5.0"`
+  - Both acceptable if error type is `invalidArgument`
+
+**Test Vector Example:**
+```json
+{
+  "operations": [
+    {"type": "load", "args": {"url": "{fixture_dir}/sine_440hz_1s.mp3"}},
+    {"type": "seek", "args": {"seconds": -1.0}}
+  ],
+  "assertions": [
+    {
+      "type": "error_thrown",
+      "expected": {
+        "type": "invalidArgument",
+        "message_contains": "negative"
+      }
+    }
+  ]
+}
+```
+
 ### Error Mapping Guidelines
 
 See `01_architecture.md` for comprehensive error mapping rules.
@@ -343,15 +438,15 @@ Used by `DecoderPort` to track open decode sessions.
 ## Thread Safety Considerations
 
 ### Immutable Models
-- `StreamInfo` is immutable → naturally thread-safe.
-- `TagBundle` fields are independent → safe to read concurrently if not mutated.
+- `StreamInfo` is immutable â†’ naturally thread-safe.
+- `TagBundle` fields are independent â†’ safe to read concurrently if not mutated.
 
 ### Mutable Models
-- `TagBundle` when used for writing → caller must synchronize.
-- Services that hold mutable models → must provide synchronization.
+- `TagBundle` when used for writing â†’ caller must synchronize.
+- Services that hold mutable models â†’ must provide synchronization.
 
 ### Error Handling
-- `CoreError` values are immutable → safe to share across threads.
+- `CoreError` values are immutable â†’ safe to share across threads.
 - Error propagation across thread boundaries is safe.
 
 ---
@@ -360,18 +455,18 @@ Used by `DecoderPort` to track open decode sessions.
 
 ### StreamInfo Validation
 ```text
-duration ≥ 0.0
+duration â‰¥ 0.0
 sampleRate > 0.0 (typically 8000.0 .. 384000.0)
-channels ≥ 1 (typically 1 or 2, max 8)
-bitDepth ≥ 8 (typically 16, 24, 32)
+channels â‰¥ 1 (typically 1 or 2, max 8)
+bitDepth â‰¥ 8 (typically 16, 24, 32)
 ```
 
 ### TagBundle Validation
 ```text
-year: if present, 1000 ≤ year ≤ 9999 (reasonable range)
-trackNumber: if present, trackNumber ≥ 1
-discNumber: if present, discNumber ≥ 1
-artworkData: if present, size ≤ 10 MB (recommended)
+year: if present, 1000 â‰¤ year â‰¤ 9999 (reasonable range)
+trackNumber: if present, trackNumber â‰¥ 1
+discNumber: if present, discNumber â‰¥ 1
+artworkData: if present, size â‰¤ 10 MB (recommended)
 ```
 
 Implementations SHOULD validate inputs and throw `CoreError.invalidArgument` for invalid values.
