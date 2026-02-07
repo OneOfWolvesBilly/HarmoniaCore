@@ -103,6 +103,37 @@ the semantics defined above.
 [error] --load()--> [paused] (recovery)
 ```
 
+**Detailed State Transition Table:**
+
+| Current State | Operation | Valid? | Next State | Notes |
+|--------------|-----------|--------|------------|-------|
+| stopped | load() | ✅ Yes | paused | File opened, ready to play |
+| stopped | play() | ❌ No | - | Throws `invalidState` |
+| stopped | pause() | ✅ Yes | stopped | Idempotent (no-op) |
+| stopped | stop() | ✅ Yes | stopped | Idempotent (no-op) |
+| stopped | seek() | ❌ No | - | Throws `invalidState` |
+| paused | load() | ✅ Yes | paused | Replaces current file |
+| paused | play() | ✅ Yes | playing | Starts playback |
+| paused | pause() | ✅ Yes | paused | Idempotent (no-op) |
+| paused | stop() | ✅ Yes | stopped | Releases resources |
+| paused | seek() | ✅ Yes | paused | Remains paused |
+| playing | load() | ✅ Yes | paused | Stops current, loads new |
+| playing | play() | ✅ Yes | playing | Idempotent (no-op) |
+| playing | pause() | ✅ Yes | paused | Suspends playback |
+| playing | stop() | ✅ Yes | stopped | Stops and releases |
+| playing | seek() | ✅ Yes | playing | Continues playing |
+| error | load() | ✅ Yes | paused | Recovery path |
+| error | play() | ❌ No | - | Throws `invalidState` |
+| error | pause() | ❌ No | - | Throws `invalidState` |
+| error | stop() | ✅ Yes | stopped | Cleanup |
+| error | seek() | ❌ No | - | Throws `invalidState` |
+
+**Key Rules**:
+1. **Idempotent operations**: `play()` while playing, `pause()` while paused, `stop()` while stopped are no-ops
+2. **Invalid operations**: Operations marked ❌ throw `CoreError.invalidState`
+3. **Load replaces**: Calling `load()` in any state (except error) replaces current track
+4. **Error recovery**: Only `load()` and `stop()` are valid in error state
+
 ---
 
 ### 4.2.2 Required API Surface
@@ -135,10 +166,10 @@ The following members are REQUIRED for `PlaybackService`
   - MUST NOT leave the service in an inconsistent state (e.g., partially loaded).
 
 **Error Cases:**
-- File not found → `CoreError.notFound`
-- Unsupported format → `CoreError.unsupported`
-- Corrupted file → `CoreError.decodeError`
-- I/O error → `CoreError.ioError`
+- File not found â†’ `CoreError.notFound`
+- Unsupported format â†’ `CoreError.unsupported`
+- Corrupted file â†’ `CoreError.decodeError`
+- I/O error â†’ `CoreError.ioError`
 
 **Thread Safety:** May be called from any thread. Implementations MUST synchronize internal state.
 
@@ -156,8 +187,8 @@ The following members are REQUIRED for `PlaybackService`
   - MUST signal `CoreError.invalidState`.
 
 **Error Cases:**
-- No track loaded → `CoreError.invalidState("No track loaded")`
-- Audio device unavailable → `CoreError.ioError`
+- No track loaded â†’ `CoreError.invalidState("No track loaded")`
+- Audio device unavailable â†’ `CoreError.ioError`
 
 **Thread Safety:** May be called from any thread. Implementations MUST synchronize with audio rendering.
 
@@ -209,12 +240,28 @@ The following members are REQUIRED for `PlaybackService`
   - MUST signal `CoreError.invalidState`.
 
 **Error Cases:**
-- Invalid position → `CoreError.invalidArgument`
-- Seeking not supported → `CoreError.unsupported`
-- No track loaded → `CoreError.invalidState`
-- Seek failed → `CoreError.decodeError`
+- Invalid position â†’ `CoreError.invalidArgument`
+- Seeking not supported â†’ `CoreError.unsupported`
+- No track loaded â†’ `CoreError.invalidState`
+- Seek failed â†’ `CoreError.decodeError`
 
 **Thread Safety:** May be called from any thread. Implementations MUST synchronize with decoding.
+
+**Seek Accuracy (Parity Requirement):**
+- Implementation SHOULD seek to within ±1ms of requested position for uncompressed formats (WAV, AIFF)
+- For compressed formats (MP3, AAC), tolerance of ±100ms is acceptable due to keyframe spacing
+- Actual position after seek may differ by codec keyframe spacing
+
+**Edge Cases:**
+- `seek(0.0)` - Beginning of file (valid)
+- `seek(duration())` - Throws `invalidArgument` (at EOF, cannot read)
+- `seek(duration() - 0.001)` - Near end (valid)
+- `seek(-1.0)` - Throws `invalidArgument` (negative)
+- `seek(∞)` or `seek(NaN)` - Throws `invalidArgument`
+
+**State Preservation:**
+- If `paused` before seek, remains `paused` after
+- If `playing` before seek, continues `playing` after
 
 ---
 
@@ -389,33 +436,33 @@ factories exist and respect the dependency rules above.
 ## 4.5 State Machine Diagram
 
 ```
-                    ┌─────────┐
-                    │ stopped │ (initial state)
-                    └────┬────┘
-                         │ load()
-                         ▼
-                    ┌─────────┐
-              ┌────▶│ paused  │◀────┐
-              │     └────┬────┘     │
-        pause()│         │ play()   │ pause()
-              │         ▼           │
-              │     ┌─────────┐     │
-              └─────│ playing │─────┘
-                    └────┬────┘
-                         │ stop()
-                         ▼
-                    ┌─────────┐
-                    │ stopped │
-                    └─────────┘
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                    â”‚ stopped â”‚ (initial state)
+                    â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜
+                         â”‚ load()
+                         â–¼
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+              â”Œâ”€â”€â”€â”€â–¶â”‚ paused  â”‚â—€â”€â”€â”€â”€â”
+              â”‚     â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜     â”‚
+        pause()â”‚         â”‚ play()   â”‚ pause()
+              â”‚         â–¼           â”‚
+              â”‚     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”     â”‚
+              â””â”€â”€â”€â”€â”€â”‚ playing â”‚â”€â”€â”€â”€â”€â”˜
+                    â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜
+                         â”‚ stop()
+                         â–¼
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                    â”‚ stopped â”‚
+                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
                     
-                         ┌─────────┐
-              (any) ────▶│ error   │
-                         └─────────┘
-                              │ load() (recovery)
-                              ▼
-                         ┌─────────┐
-                         │ paused  │
-                         └─────────┘
+                         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+              (any) â”€â”€â”€â”€â–¶â”‚ error   â”‚
+                         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                              â”‚ load() (recovery)
+                              â–¼
+                         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                         â”‚ paused  â”‚
+                         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Notes:**
@@ -519,14 +566,14 @@ All `PlaybackService` implementations MUST pass the following test categories:
 
 ### Playback Tests
 - Load and play various audio formats
-- Verify audio output matches expected waveform (±1 sample tolerance)
+- Verify audio output matches expected waveform (Â±1 sample tolerance)
 - Verify position tracking accuracy
 - Verify seek accuracy
 
 ### Error Handling Tests
-- Missing file → `CoreError.notFound`
-- Unsupported format → `CoreError.unsupported`
-- Corrupted file → `CoreError.decodeError`
+- Missing file â†’ `CoreError.notFound`
+- Unsupported format â†’ `CoreError.unsupported`
+- Corrupted file â†’ `CoreError.decodeError`
 - Recovery after error state
 
 ### Thread Safety Tests
