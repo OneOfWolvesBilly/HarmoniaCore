@@ -11,17 +11,6 @@ It provides a deterministic, testable audio domain model implemented independent
 multiple platforms without sharing source code, using **hexagonal (ports & adapters)
 architecture**.
 
----
-
-## Overview
-
-HarmoniaCore is an open-source, architecture-first audio playback core designed for
-**behavior parity across platforms**.
-
-It provides a deterministic, testable audio domain model implemented independently on
-multiple platforms without sharing source code, using **hexagonal (ports & adapters)
-architecture**.
-
 * **Swift (Apple platforms)**: complete and serves as the **reference implementation**
 * **C++20 (Linux)**: planned parity implementation
 
@@ -122,8 +111,8 @@ print("State: \(service.state)")
 ## Development
 
 ### Requirements
-- Xcode 15.0+ (Swift 5.9+)
-- macOS 13.0+ or iOS 16.0+
+- Xcode 26 beta (Swift 6)
+- macOS 15.6+ or iOS 26+
 
 ### Building
 
@@ -234,7 +223,7 @@ Focus areas:
 - [Models Specification](docs/specs/05_models.md)
 
 ### Implementation Guides
-- [Apple Adapters Implementation](docs/impl/02_01_apple_adapters_impl.md)
+- [Apple Adapters Implementation](docs/impl/02_01_apple.adapters_impl.md)
 - [Ports Implementation](docs/impl/03_ports_impl.md)
 - [Services Implementation](docs/impl/04_services_impl.md)
 - [Models Implementation](docs/impl/05_models_impl.md)

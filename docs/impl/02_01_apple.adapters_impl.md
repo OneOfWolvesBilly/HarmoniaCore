@@ -298,17 +298,49 @@ public final class AVAudioEngineOutputAdapter: AudioOutputPort {
     public func stop() {
         playerNode.stop()
         engine.stop()
+        engine.reset()
     }
-    
+
+    /// Clears in-flight buffers without stopping AVAudioEngine.
+    ///
+    /// Calls `playerNode.stop()` to cancel all scheduled buffers, signals
+    /// the backpressure semaphore to unblock any thread waiting in `render()`,
+    /// then restarts the player node for fresh output. The engine continues
+    /// running throughout — only the player node is recycled.
+    ///
+    /// Must be called before submitting decoded audio from a new seek position.
+    public func flush() {
+        // Stop player node — cancels all scheduled buffers without callbacks.
+        playerNode.stop()
+        // Signal semaphore to unblock any thread blocked in render().
+        for _ in 0..<maxInFlight { bufferSemaphore.signal() }
+        // Reset semaphore and restart player node.
+        bufferSemaphore = DispatchSemaphore(value: maxInFlight)
+        if isStarted { playerNode.play() }
+    }
+
     public func render(_ buffer: UnsafePointer<Float>, frameCount: Int) throws -> Int {
-        // Schedule buffer to playerNode
-        // Implementation details in actual code
+        // Uses DispatchSemaphore for double-buffer backpressure.
+        // MUST NOT be called from a Swift async Task — use DispatchQueue instead.
+        bufferSemaphore.wait()
+        // Schedule PCM buffer to playerNode
         return frameCount
     }
 }
 ```
 
-**Thread Safety:** Must be called on `@MainActor` for UI integration.
+**Backpressure mechanism:** `render()` uses a `DispatchSemaphore` with
+`maxInFlight = 2` (double-buffering). The semaphore is signalled in the
+AVAudioPlayerNode completion handler after each buffer finishes playing.
+This ensures the decode loop does not outrun the audio engine.
+
+**Why `DispatchQueue`, not `Task.detached`:** Calling `DispatchSemaphore.wait()`
+from a Swift async context blocks a cooperative thread pool thread, causing
+thread pool starvation and choppy audio. The playback loop MUST run on
+`DispatchQueue.global(qos: .userInteractive)` instead.
+
+**Thread Safety:** `configure()`, `start()`, `stop()`, and `flush()` are
+protected by an internal `NSLock`. `render()` may be called from any thread.
 
 ---
 
@@ -400,16 +432,3 @@ private func mapAVError(_ error: Error) -> CoreError {
     return .ioError(underlying: error)
 }
 ```
-
----
-
-## Implementation Checklist
-
-When implementing Apple adapters:
-
-- [ ] Use `Sendable` for thread-safe types
-- [ ] Use `@MainActor` for UI-bound components (audio engine)
-- [ ] Map all platform errors to `CoreError`
-- [ ] Implement proper resource cleanup in `deinit`
-- [ ] Add comprehensive error messages for debugging
-- [ ] Test on both iOS and macOS

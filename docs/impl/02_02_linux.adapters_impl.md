@@ -920,18 +920,3 @@ public:
     }
 };
 ```
-
----
-
-## Implementation Checklist
-
-When implementing Linux adapters:
-
-- [ ] Link against required libraries (PipeWire, FFmpeg, TagLib, spdlog)
-- [ ] Handle POSIX errors properly (EINTR retries, errno mapping)
-- [ ] Use thread-safe data structures (mutexes, atomics)
-- [ ] Implement proper resource cleanup in destructors
-- [ ] Map all platform errors to `CoreError`
-- [ ] Test on multiple Linux distributions
-- [ ] Verify real-time safety for audio callbacks
-- [ ] Handle missing dependencies gracefully (e.g., PipeWire unavailable)
