@@ -213,6 +213,10 @@ public protocol AudioOutputPort: AnyObject {
         _ buffer: UnsafePointer<Float>,
         frameCount: Int
     ) throws -> Int
+
+    /// Flushes all queued audio buffers without stopping the engine.
+    /// Use before seeking to clear stale audio from the old position.
+    func flush()
 }
 ```
 
@@ -220,6 +224,7 @@ public protocol AudioOutputPort: AnyObject {
 - `configure()` can throw (e.g., unsupported sample rate)
 - `stop()` must NOT throw (spec requirement)
 - `render()` may be called from real-time audio thread
+- `flush()` must NOT throw; clears queued buffers, restarts player node
 
 **Usage:**
 ```swift
@@ -865,20 +870,3 @@ TEST(PlaybackServiceTest, LoadCallsDecoder) {
     EXPECT_EQ(decoder_ptr->last_opened_url, "/test/audio.mp3");
 }
 ```
-
----
-
-## Implementation Checklist
-
-When implementing a new Port:
-
-- [ ] Define abstract interface (protocol/class)
-- [ ] Specify thread-safety requirements
-- [ ] Document error conditions
-- [ ] Document real-time safety (if applicable)
-- [ ] Create at least one concrete adapter
-- [ ] Write unit tests with mock implementations
-- [ ] Document usage examples
-- [ ] Ensure cross-platform behavior parity
-- [ ] Validate synchronous vs asynchronous API choice
-- [ ] Check that all methods match the spec exactly

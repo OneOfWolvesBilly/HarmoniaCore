@@ -259,6 +259,7 @@ protocol AudioOutputPort {
     configure(sampleRate: Double, channels: Int, framesPerBuffer: Int)
     start() throws
     stop()
+    flush()
     render(interleavedFloat32: UnsafePointer<Float>, frameCount: Int) throws -> Int
 }
 ```
@@ -288,6 +289,17 @@ protocol AudioOutputPort {
 - MUST be idempotent (safe to call multiple times).
 - MUST NOT throw exceptions.
 - Thread Safety: MUST be called on main thread.
+
+**flush()**
+- Clears all queued audio buffers without stopping the audio engine.
+- Implementations MUST discard any in-flight buffers scheduled for playback.
+- After `flush()`, the next `render()` call MUST begin from a clean state.
+- MUST be idempotent (safe to call multiple times).
+- MUST NOT throw exceptions.
+- Use case: seek operations — call `flush()` before decoding from a new position
+  to prevent stale audio from the old position from being heard.
+- Thread Safety: MAY be called from any thread. Implementations MUST synchronize
+  internal state with `stop()` and `render()`.
 
 **render(interleavedFloat32, frameCount)**
 - Provides audio data to be played.

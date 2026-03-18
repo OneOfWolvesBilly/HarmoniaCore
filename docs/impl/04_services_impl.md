@@ -149,8 +149,14 @@ extension DefaultPlaybackService {
             return 0.0 // Simplified - should track actual position
         case .stopped, .error:
             return 0.0
+        case .paused:
+            return lastKnownPosition
         case .buffering:
-            return 0.0
+            // .buffering is used during EOF drain. The clock continues running
+            // so that the playback position advances to the end of the track
+            // rather than freezing before the last second.
+            let elapsed = Double(clock.now() - playbackStartTime) / 1_000_000_000.0
+            return min(lastKnownPosition + elapsed, streamInfo?.duration ?? 0)
         }
     }
     
@@ -158,11 +164,29 @@ extension DefaultPlaybackService {
         return streamInfo?.duration ?? 0.0
     }
     
+    /// Buffer size is calculated dynamically from the stream's sample rate,
+    /// targeting ~100ms per buffer rounded to the nearest power of two.
+    /// This avoids truncation caused by a fixed buffer size mismatching the
+    /// decoded stream's frame count.
+    ///
+    ///   44100 Hz → 4096 frames | 48000 Hz → 4096 | 96000 Hz → 8192
+    ///
+    /// The playback loop runs on `DispatchQueue.global(qos: .userInteractive)`
+    /// rather than `Task.detached` to avoid blocking Swift cooperative thread
+    /// pool threads with `DispatchSemaphore.wait()`.
+    ///
+    /// At EOF, `_state` transitions to `.buffering` before the drain sleep so
+    /// that position observers continue advancing to the track end. After drain,
+    /// `_state` transitions to `.stopped`.
     public func seek(to seconds: Double) throws {
         guard let handle = currentHandle else {
             throw CoreError.invalidState("No track loaded")
         }
-        
+
+        // flush() must be called before decoding from the new position to
+        // prevent stale audio from the old position from being heard.
+        audio.flush()
+
         guard seconds >= 0 else {
             throw CoreError.invalidArgument("Seek position must be >= 0")
         }
@@ -462,15 +486,3 @@ let service = DefaultPlaybackService(
 try service.load(url: testURL)
 XCTAssertTrue(mockDecoder.openCalled)
 ```
-
----
-
-## Implementation Checklist
-
-- [ ] Services depend only on Ports (no platform imports)
-- [ ] All dependencies injected via constructor
-- [ ] Thread-safe state management
-- [ ] Proper error handling and propagation
-- [ ] Resource cleanup in deinit/destructor
-- [ ] Idempotent operations (play/pause/stop)
-- [ ] Comprehensive logging for debugging

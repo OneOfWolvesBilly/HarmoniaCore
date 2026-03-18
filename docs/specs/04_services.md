@@ -54,6 +54,11 @@ Normative semantics:
 
 - **`buffering`**  
   *(Optional)* Waiting for decode/output; implementation MAY use this as a transient state.  
+  **Defined use case:** Implementations MAY transition to `buffering` during the brief
+  EOF drain period after the decoder reaches end-of-file but before the audio engine
+  finishes consuming queued buffers. This prevents playback position observers from
+  misreading early completion. Implementations MUST transition to `stopped` once drain
+  is complete.  
   **Note:** If used, cross-platform tests MUST account for this state. Prefer deterministic states (`playing`, `paused`) for consistency.
 
 - **`error(CoreError)`**  
@@ -172,6 +177,26 @@ The following members are REQUIRED for `PlaybackService`
 - I/O error â†’ `CoreError.ioError`
 
 **Thread Safety:** May be called from any thread. Implementations MUST synchronize internal state.
+
+### Buffer Size
+
+Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
+sample rate, targeting approximately 100ms of audio per buffer, rounded to the
+nearest power of two. This avoids truncation or silence caused by a fixed buffer
+size that does not match the decoded stream's frame count.
+
+Examples:
+- 44100 Hz → 4096 frames (~93ms)
+- 48000 Hz → 4096 frames (~85ms)
+- 96000 Hz → 8192 frames (~85ms)
+- 22050 Hz → 2048 frames (~93ms)
+
+### Seek and Audio Output Flushing
+
+When `seek(to:)` is called while the service is playing, implementations MUST
+call `AudioOutputPort.flush()` before submitting new decoded audio to the output.
+This prevents stale audio from the pre-seek position from being heard after the
+seek completes.
 
 ---
 
