@@ -348,43 +348,199 @@ protected by an internal `NSLock`. `render()` may be called from any thread.
 
 Reads metadata using `AVAsset` APIs.
 
+**Why two metadata collections:**
+`asset.load(.commonMetadata)` only returns cross-format common keys
+(title, artist, album, artwork). Format-specific fields such as albumArtist,
+genre, year, trackNumber, and discNumber are only accessible via
+`asset.load(.metadata)`, which returns all available metadata items including
+iTunes and ID3 format-specific identifiers.
+
+**Async bridging pattern:**
+`TagReaderPort.read(url:)` is synchronous. AVFoundation loading is async.
+The pattern below wraps each `asset.load()` in a `Task { }` with a
+`DispatchSemaphore` to bridge the two worlds without blocking the cooperative
+thread pool.
+
 ```swift
-import AVFoundation
+import Foundation
+@preconcurrency import AVFoundation
 
 public final class AVMetadataTagReaderAdapter: TagReaderPort {
+
     public init() {}
-    
+
     public func read(url: URL) throws -> TagBundle {
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
+
+        // ── Step 1: Load commonMetadata (title, artist, album, artwork) ──
+
+        var commonItems: [AVMetadataItem] = []
+        var loadError: Error?
+
+        let sema1 = DispatchSemaphore(value: 0)
+        Task {
+            do { commonItems = try await asset.load(.commonMetadata) }
+            catch { loadError = error }
+            sema1.signal()
+        }
+        sema1.wait()
+        if let error = loadError { throw CoreError.ioError(underlying: error) }
+
+        // ── Step 2: Load all metadata (albumArtist, genre, year, numbers) ─
+
+        var allItems: [AVMetadataItem] = []
+        let sema2 = DispatchSemaphore(value: 0)
+        Task {
+            do { allItems = try await asset.load(.metadata) }
+            catch { /* non-fatal — extended fields will be nil */ }
+            sema2.signal()
+        }
+        sema2.wait()
+
+        // ── Step 3: Build TagBundle ───────────────────────────────────────
+
         var bundle = TagBundle()
-        
-        for item in asset.commonMetadata {
-            switch item.commonKey {
+
+        // Core fields from commonMetadata
+        for item in commonItems {
+            guard let key = item.commonKey else { continue }
+            switch key {
             case .commonKeyTitle:
-                bundle.title = item.stringValue
+                bundle.title = loadString(from: item)
             case .commonKeyArtist:
-                bundle.artist = item.stringValue
+                bundle.artist = loadString(from: item)
             case .commonKeyAlbumName:
-                bundle.album = item.stringValue
-            case .commonKeyType:
-                bundle.genre = item.stringValue
+                bundle.album = loadString(from: item)
             default:
                 break
             }
         }
-        
-        // Extract artwork if available
+
+        // Artwork from commonMetadata
         if let artworkItem = AVMetadataItem.metadataItems(
-            from: asset.commonMetadata,
+            from: commonItems,
             filteredByIdentifier: .commonIdentifierArtwork
         ).first {
-            bundle.artworkData = artworkItem.dataValue
+            bundle.artworkData = loadData(from: artworkItem)
         }
-        
+
+        // Extended fields from format-specific metadata
+        bundle.albumArtist = readString(from: allItems, identifiers: [
+            .iTunesMetadataAlbumArtist,
+            .id3MetadataBand                    // TPE2
+        ])
+
+        bundle.genre = readString(from: allItems, identifiers: [
+            .iTunesMetadataUserGenre,
+            .iTunesMetadataPredefinedGenre,
+            .id3MetadataContentType             // TCON
+        ])
+
+        bundle.year = readYear(from: allItems)
+
+        bundle.trackNumber = readPartNumber(from: allItems, identifiers: [
+            .iTunesMetadataTrackNumber,
+            .id3MetadataTrackNumber             // TRCK
+        ])
+
+        bundle.discNumber = readPartNumber(from: allItems, identifiers: [
+            .iTunesMetadataDiskNumber
+            // ID3 TPOS has no named AVFoundation constant
+        ])
+
         return bundle
+    }
+
+    // MARK: - Private helpers
+
+    /// Synchronously loads the string value of a metadata item.
+    private func loadString(from item: AVMetadataItem) -> String? {
+        let sema = DispatchSemaphore(value: 0)
+        var result: String?
+        Task {
+            result = try? await item.load(.stringValue)
+            sema.signal()
+        }
+        sema.wait()
+        return result
+    }
+
+    /// Synchronously loads the data value of a metadata item.
+    private func loadData(from item: AVMetadataItem) -> Data? {
+        let sema = DispatchSemaphore(value: 0)
+        var result: Data?
+        Task {
+            result = try? await item.load(.dataValue)
+            sema.signal()
+        }
+        sema.wait()
+        return result
+    }
+
+    /// Returns the first non-empty string matching any of the given identifiers.
+    private func readString(
+        from items: [AVMetadataItem],
+        identifiers: [AVMetadataIdentifier]
+    ) -> String? {
+        for id in identifiers {
+            let matches = AVMetadataItem.metadataItems(from: items,
+                                                       filteredByIdentifier: id)
+            if let first = matches.first,
+               let s = loadString(from: first),
+               !s.isEmpty {
+                return s
+            }
+        }
+        return nil
+    }
+
+    /// Parses a year integer from release-date / year metadata identifiers.
+    ///
+    /// Handles ISO-8601 dates ("1977-05-25") and bare year strings ("1977").
+    /// Takes the first 4 characters and converts to Int.
+    private func readYear(from items: [AVMetadataItem]) -> Int? {
+        let identifiers: [AVMetadataIdentifier] = [
+            .iTunesMetadataReleaseDate,
+            .id3MetadataRecordingTime,          // TDRC (ID3v2.4)
+            .id3MetadataYear,                   // TYER (ID3v2.3)
+            .commonIdentifierCreationDate
+        ]
+        for id in identifiers {
+            let matches = AVMetadataItem.metadataItems(from: items,
+                                                       filteredByIdentifier: id)
+            if let first = matches.first,
+               let s = loadString(from: first) {
+                let yearStr = String(s.prefix(4))
+                if let y = Int(yearStr), y > 0 { return y }
+            }
+        }
+        return nil
+    }
+
+    /// Parses the first part of a "N/total" track or disc number string.
+    ///
+    /// Examples: "3/12" → 3, "3" → 3. Returns nil if value is 0 or negative.
+    private func readPartNumber(
+        from items: [AVMetadataItem],
+        identifiers: [AVMetadataIdentifier]
+    ) -> Int? {
+        for id in identifiers {
+            let matches = AVMetadataItem.metadataItems(from: items,
+                                                       filteredByIdentifier: id)
+            if let first = matches.first,
+               let s = loadString(from: first) {
+                let part = s.split(separator: "/").first.map(String.init) ?? s
+                let trimmed = part.trimmingCharacters(in: .whitespaces)
+                if let n = Int(trimmed), n > 0 { return n }
+            }
+        }
+        return nil
     }
 }
 ```
+
+**Thread Safety:** All AVFoundation calls are bridged via `DispatchSemaphore`.
+The adapter is safe to call from background threads.
 
 ---
 

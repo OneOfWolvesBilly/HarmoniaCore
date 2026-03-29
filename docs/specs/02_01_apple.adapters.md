@@ -144,14 +144,55 @@ Each adapter implements one Port interface and translates platform-specific APIs
 
 ### 2.9 AVMetadataTagReaderAdapter : TagReaderPort
 
-- Reads ID3 / MP4 metadata using `AVAsset` APIs.  
+- Reads ID3 / MP4 metadata using `AVAsset` APIs.
 - Maps metadata into HarmoniaCore's `TagBundle`.
 - Thread-safe: Metadata reading can be performed on background threads.
 
-**Supported Tags:**
-- Common metadata: Title, Artist, Album, Album Artist
-- Extended metadata: Genre, Year, Track Number, Disc Number
-- Artwork: Embedded cover art as raw image data
+**Reading strategy:**
+
+Two metadata collections must be loaded from the asset:
+
+1. `asset.load(.commonMetadata)` — cross-format common keys.
+   Used for: title, artist, album, artwork.
+
+2. `asset.load(.metadata)` — format-specific keys (iTunes / ID3).
+   Required for: albumArtist, genre, year, trackNumber, discNumber.
+   `commonMetadata` does not expose these fields reliably across formats.
+
+**Field → AVMetadataIdentifier mapping:**
+
+| TagBundle field | iTunes identifier | ID3 identifier | Notes |
+|---|---|---|---|
+| `title` | `.commonKeyTitle` (common) | `.commonKeyTitle` (common) | Via commonMetadata |
+| `artist` | `.commonKeyArtist` (common) | `.commonKeyArtist` (common) | Via commonMetadata |
+| `album` | `.commonKeyAlbumName` (common) | `.commonKeyAlbumName` (common) | Via commonMetadata |
+| `albumArtist` | `.iTunesMetadataAlbumArtist` | `.id3MetadataBand` (TPE2) | iTunes preferred |
+| `genre` | `.iTunesMetadataUserGenre` | `.id3MetadataContentType` (TCON) | iTunes preferred |
+| `year` | `.iTunesMetadataReleaseDate` | `.id3MetadataRecordingTime` (TDRC) / `.id3MetadataYear` (TYER) | Parse first 4 chars as Int |
+| `trackNumber` | `.iTunesMetadataTrackNumber` | `.id3MetadataTrackNumber` (TRCK) | Parse "N/total" → N |
+| `discNumber` | `.iTunesMetadataDiskNumber` | *(no named constant for TPOS)* | iTunes only |
+| `artworkData` | `.commonIdentifierArtwork` (common) | `.commonIdentifierArtwork` (common) | Via commonMetadata, load `.dataValue` |
+
+**Parsing rules:**
+
+- **year**: String value may be a full ISO-8601 date (`"1977-05-25"`) or a bare
+  year (`"1977"`). Take the first 4 characters and parse as `Int`. Discard if
+  result is 0 or negative.
+- **trackNumber / discNumber**: String value may be `"N"` or `"N/total"`.
+  Split on `"/"`, take the first part, parse as `Int`. Discard if result is 0
+  or negative.
+- **genre (ID3)**: TCON may contain a numeric genre index in parentheses
+  (`"(17)"`) per ID3v2.3 spec. Return the string as-is; do not resolve genre
+  index tables. Downstream consumers should display whatever string is present.
+
+**Priority:** When both iTunes and ID3 identifiers are present in the same file
+(unusual but possible in hybrid MP4), the iTunes identifier takes precedence
+because it is tried first via `AVMetadataItem.metadataItems(filteredByIdentifier:)`.
+
+**Async loading:** `TagReaderPort.read(url:)` is synchronous. AVFoundation
+metadata loading is async. Wrap each `asset.load()` call in a `Task { }` with
+a `DispatchSemaphore` to bridge the boundary. See implementation guide
+`impl/02_01_apple.adapters_impl.md` for the pattern.
 
 ---
 
