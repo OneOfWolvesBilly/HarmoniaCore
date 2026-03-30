@@ -170,7 +170,7 @@ Two metadata collections must be loaded from the asset:
 | `genre` | `.iTunesMetadataUserGenre` | `.id3MetadataContentType` (TCON) | iTunes preferred |
 | `year` | `.iTunesMetadataReleaseDate` | `.id3MetadataRecordingTime` (TDRC) / `.id3MetadataYear` (TYER) | Parse first 4 chars as Int |
 | `trackNumber` | `.iTunesMetadataTrackNumber` | `.id3MetadataTrackNumber` (TRCK) | Parse "N/total" → N |
-| `discNumber` | `.iTunesMetadataDiskNumber` | *(no named constant for TPOS)* | iTunes only |
+| `discNumber` | `AVMetadataKey.iTunesMetadataKeyDiscNumber` (key+keySpace API) | *(no named constant for TPOS)* | Uses `withKey:keySpace:` — no `AVMetadataIdentifier` constant exists |
 | `artworkData` | `.commonIdentifierArtwork` (common) | `.commonIdentifierArtwork` (common) | Via commonMetadata, load `.dataValue` |
 
 **Parsing rules:**

@@ -443,10 +443,13 @@ public final class AVMetadataTagReaderAdapter: TagReaderPort {
             .id3MetadataTrackNumber             // TRCK
         ])
 
-        bundle.discNumber = readPartNumber(from: allItems, identifiers: [
-            .iTunesMetadataDiskNumber
-            // ID3 TPOS has no named AVFoundation constant
-        ])
+        bundle.discNumber = readPartNumberByKey(
+            from: allItems,
+            key: AVMetadataKey.iTunesMetadataKeyDiscNumber,
+            keySpace: .iTunes
+            // No AVMetadataIdentifier constant exists for iTunes disc number;
+            // must use the key+keySpace API. ID3 TPOS also has no named constant.
+        )
 
         return bundle
     }
