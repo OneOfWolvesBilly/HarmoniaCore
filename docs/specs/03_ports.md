@@ -84,7 +84,7 @@ protocol ClockPort {
 ### Semantics
 
 - **Monotonic Guarantee:** Returned values MUST NEVER decrease, even across system sleep/wake.
-- **Precision:** MUST provide nanosecond resolution or better. If native precision is lower (e.g., microseconds), implementations MUST convert to nanoseconds.
+- **Precision:** MUST provide nanosecond resolution or better.
 - **Epoch:** The epoch is unspecified and implementation-defined. Only relative differences between calls are meaningful.
 - **Thread Safety:** MUST be safe to call from any thread concurrently without synchronization.
 - **Real-Time Safety:** SHOULD be safe to call from real-time audio threads (no allocations, no blocking).
@@ -143,15 +143,10 @@ protocol FileAccessPort {
 - Returns `0` at end of file.
 - Throws `CoreError.invalidState` if `token` is invalid.
 - Throws `CoreError.ioError` for I/O errors.
-- Thread Safety: Safe to call concurrently with different tokens. Behavior is undefined if called concurrently with the same token.
+- Thread Safety: Safe to call concurrently with different tokens.
 
 **seek(token, offset, origin)**
 - Changes the current file position for subsequent read operations.
-- `offset` interpretation depends on `origin`:
-  - `start`: Seek to `offset` bytes from beginning (offset must be ≥ 0)
-  - `current`: Seek `offset` bytes from current position (can be negative)
-  - `end`: Seek to `offset` bytes from end (typically negative)
-- Resulting position must be within [0, file_size].
 - Throws `CoreError.invalidState` if `token` is invalid.
 - Throws `CoreError.invalidArgument` if resulting position is invalid.
 - Throws `CoreError.ioError` for I/O errors.
@@ -167,15 +162,7 @@ protocol FileAccessPort {
 - Closes file associated with `token` and releases resources.
 - MUST be idempotent (safe to call multiple times).
 - MUST NOT throw exceptions.
-- After close, `token` becomes invalid.
 - Thread Safety: Safe to call concurrently with different tokens.
-
-### Error Handling
-
-Implementations MUST handle platform-specific errors:
-- **POSIX (Linux):** Retry on `EINTR`, handle partial reads.
-- **Windows:** Handle wide-character paths, retry on transient errors.
-- **macOS/iOS:** Handle sandbox restrictions, security-scoped bookmarks.
 
 ---
 
@@ -218,15 +205,12 @@ protocol DecoderPort {
 - Returns `0` at end of stream.
 - Throws `CoreError.invalidState` if `handle` is invalid.
 - Throws `CoreError.decodeError` if decoding fails.
-- Thread Safety: Undefined behavior if called concurrently with same handle. Use separate handles for concurrent decoding.
 
 **seek(handle, toSeconds)**
 - Seeks to position `toSeconds` in the audio stream.
-- Next `read()` will return frames starting from this position.
 - Throws `CoreError.unsupported` if seeking is not supported for this format.
 - Throws `CoreError.invalidArgument` if `toSeconds` is negative or beyond stream duration.
 - Throws `CoreError.invalidState` if `handle` is invalid.
-- Thread Safety: Undefined behavior if called concurrently with `read()` on same handle.
 
 **info(handle)**
 - Returns `StreamInfo` describing the audio stream (see `05_models.md`).
@@ -237,8 +221,6 @@ protocol DecoderPort {
 - Closes decoder and releases resources.
 - MUST be idempotent (safe to call multiple times).
 - MUST NOT throw exceptions.
-- After close, `handle` becomes invalid.
-- Thread Safety: Safe to call concurrently with different handles.
 
 ### Format Requirements
 
@@ -267,58 +249,27 @@ protocol AudioOutputPort {
 ### Semantics
 
 **configure(sampleRate, channels, framesPerBuffer)**
-- Configures audio output parameters.
-- `sampleRate`: Sample rate in Hz (e.g., 44100.0, 48000.0).
-- `channels`: Number of audio channels (typically 2 for stereo).
-- `framesPerBuffer`: Preferred buffer size in frames (hint only; actual size may differ).
-- MUST be called before `start()`.
-- MAY be called while stopped to reconfigure.
-- MUST NOT be called while playing.
-- Thread Safety: MUST be called on main thread (platform-specific requirement).
+- Configures audio output parameters. MUST be called before `start()`.
+- Thread Safety: MUST be called on main thread.
 
 **start()**
 - Starts audio output.
-- Audio hardware begins consuming data via `render()` calls.
 - Throws `CoreError.invalidState` if not configured.
 - Throws `CoreError.ioError` if audio device cannot be started.
-- Thread Safety: MUST be called on main thread.
 
 **stop()**
-- Stops audio output.
-- Audio hardware stops consuming data.
-- MUST be idempotent (safe to call multiple times).
-- MUST NOT throw exceptions.
-- Thread Safety: MUST be called on main thread.
+- Stops audio output. MUST be idempotent. MUST NOT throw.
 
 **flush()**
 - Clears all queued audio buffers without stopping the audio engine.
-- Implementations MUST discard any in-flight buffers scheduled for playback.
-- After `flush()`, the next `render()` call MUST begin from a clean state.
-- MUST be idempotent (safe to call multiple times).
-- MUST NOT throw exceptions.
-- Use case: seek operations — call `flush()` before decoding from a new position
-  to prevent stale audio from the old position from being heard.
-- Thread Safety: MAY be called from any thread. Implementations MUST synchronize
-  internal state with `stop()` and `render()`.
+- Use case: seek operations — call `flush()` before decoding from a new position.
+- MUST be idempotent. MUST NOT throw.
 
 **render(interleavedFloat32, frameCount)**
 - Provides audio data to be played.
-- `interleavedFloat32`: Buffer of Float32 samples, interleaved by channel.
-- `frameCount`: Number of frames in buffer.
-- Returns number of frames actually consumed (may be less than `frameCount`).
+- Returns number of frames actually consumed.
 - Throws `CoreError.invalidState` if output is not started.
-- **Real-Time Safety:** This method MAY be called from a real-time audio thread. Implementations MUST:
-  - NOT allocate memory
-  - NOT block or wait
-  - NOT acquire locks (use lock-free data structures)
-  - Complete in bounded time
-
-### Buffer Format
-
-- **Interleaved:** Samples are interleaved by channel.  
-  Example (2 channels): `[L0, R0, L1, R1, L2, R2, ...]`
-- **Sample Range:** Float32 values in range [-1.0, 1.0].
-- **Clipping:** Implementations SHOULD clip samples outside this range.
+- **Real-Time Safety:** MUST NOT allocate memory, block, or acquire locks.
 
 ---
 
@@ -339,7 +290,7 @@ protocol TagReaderPort {
 **read(url)**
 - Reads metadata tags from audio file at `url`.
 - Returns `TagBundle` containing extracted metadata (see `05_models.md`).
-- Fields not present in file are left as `nil`/`null`/optional empty.
+- Fields not present in file are left as `nil`/`null`.
 - Throws `CoreError.notFound` if file does not exist.
 - Throws `CoreError.ioError` for I/O errors.
 - Throws `CoreError.unsupported` if file format does not support metadata.
@@ -352,13 +303,6 @@ Implementations SHOULD support:
 - **Vorbis Comments** (FLAC, Ogg Vorbis, Opus)
 - **MP4 metadata** (M4A, AAC)
 - **APEv2 tags** (APE, some MP3)
-
-### Cross-Platform Consistency
-
-- Tag mappings MUST be consistent across platforms.
-- Field names MUST match `TagBundle` specification.
-- Text encoding MUST be normalized to UTF-8.
-- Missing tags MUST result in `nil`/`null` fields, not empty strings.
 
 ---
 
@@ -385,12 +329,67 @@ protocol TagWriterPort {
 - Throws `CoreError.unsupported` if platform or file format does not support writing.
 - Thread Safety: MUST synchronize file writes if called concurrently.
 
-### Preservation Requirements
+---
 
-Implementations SHOULD:
-- Preserve unknown tag frames/atoms not defined in `TagBundle`.
-- Create backup before modifying file (optional but recommended).
-- Handle read-only files gracefully (throw `CoreError.ioError`).
+## CueSheetPort
+
+Parses CUE sheet files and returns a structured `CueSheet` model.
+
+### Interface
+
+```text
+protocol CueSheetPort {
+    parse(url: String) throws -> CueSheet
+}
+```
+
+### Semantics
+
+**parse(url)**
+- Reads and parses the CUE sheet file at `url`.
+- Returns a fully populated `CueSheet` (see `05_models.md`).
+- Resolves the `FILE` directive path relative to the directory containing the `.cue` file.
+- MUST NOT verify that the referenced audio file exists.
+- `CueSheet.tracks` MUST be non-empty and sorted ascending by `startTime`.
+- `CueTrack.endTime` for the last track MUST be `nil`.
+- `CueTrack.endTime` for all other tracks is derived from the next track's `startTime` minus one CUE frame (1/75 s).
+- Throws `CoreError.notFound` if the `.cue` file does not exist.
+- Throws `CoreError.ioError` for I/O errors.
+- Throws `CoreError.decodeError` if the CUE sheet is malformed (no `FILE` directive, no tracks, invalid timestamps).
+- Thread Safety: Safe to call concurrently.
+
+### CUE Timestamp Conversion
+
+CUE sheet timestamps use MM:SS:FF format where FF is frames (1/75 second).
+
+```text
+seconds = MM * 60.0 + SS + FF / 75.0
+```
+
+Implementations MUST use this formula exactly to ensure cross-platform parity.
+
+### Supported CUE Sheet Variants
+
+Implementations SHOULD support:
+- Single-file CUE sheets (one `FILE` directive, multiple `TRACK` entries)
+- Per-track `TITLE` and `PERFORMER` fields
+- `INDEX 00` (pre-gap) and `INDEX 01` (track start); `INDEX 01` is used for `startTime`
+
+Implementations MAY ignore:
+- `REM` comment lines
+- `CATALOG`, `ISRC`, `SONGWRITER` fields
+- `INDEX` entries other than `INDEX 01`
+
+### Error Cases
+
+| Condition | Error |
+|-----------|-------|
+| File does not exist | `CoreError.notFound` |
+| File is not readable | `CoreError.ioError` |
+| No `FILE` directive | `CoreError.decodeError` |
+| No `TRACK` entries | `CoreError.decodeError` |
+| Invalid timestamp format | `CoreError.decodeError` |
+| Multiple `FILE` directives | `CoreError.unsupported` |
 
 ---
 
@@ -411,7 +410,7 @@ Implementations SHOULD:
    Methods called from audio threads (e.g., `AudioOutputPort.render()`) MUST NOT:
    - Allocate memory
    - Block or wait
-   - Acquire locks (use lock-free data structures instead)
+   - Acquire locks
 
 5. **Testing**  
    Every Port implementation MUST pass behavior parity tests defined in `api-parity.md`.
