@@ -328,6 +328,10 @@ protocol TagWriterPort {
 - Throws `CoreError.ioError` for I/O errors (including permission denied).
 - Throws `CoreError.unsupported` if platform or file format does not support writing.
 - Thread Safety: MUST synchronize file writes if called concurrently.
+- ReplayGain fields: `replayGainTrack` and `replayGainAlbum` in `TagBundle`
+  are not written by current `TagWriterPort` implementations. Writing support
+  is planned for a future TagLib-based adapter. Implementations MUST silently
+  skip these fields rather than throw an error.
 
 ---
 
