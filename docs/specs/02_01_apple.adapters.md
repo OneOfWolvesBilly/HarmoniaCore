@@ -198,14 +198,16 @@ a `DispatchSemaphore` to bridge the boundary. See implementation guide
 
 ### 2.10 AVMutableTagWriterAdapter : TagWriterPort
 
-- Uses `AVMutableMetadataItem` for writable metadata where supported.  
+- Uses `AVMutableMetadataItem` for writable metadata where supported.
 - **Currently throws `CoreError.unsupported` on all platforms.**
 - **iOS:** All write attempts throw due to sandbox restrictions.
 - **macOS:** Support deferred; currently throws for consistency.
+- **ReplayGain:** Not writable on Apple platforms due to AVFoundation limitations.
+  Future TagLib-based adapter planned for cross-platform write support.
 
-**Future Plans:**
-- May provide limited macOS-only tag editing in future versions.
-- iOS will remain read-only due to fundamental sandbox limitations.
+**Limitation:**
+- Implementations MUST silently skip `replayGainTrack` and `replayGainAlbum`
+  fields rather than throw an error.
 
 ---
 

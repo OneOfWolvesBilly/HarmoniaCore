@@ -554,8 +554,11 @@ Currently not functional on any Apple platform.
 ```swift
 public final class AVMutableTagWriterAdapter: TagWriterPort {
     public init() {}
-    
+
     public func write(url: URL, tags: TagBundle) throws {
+        // replayGainTrack and replayGainAlbum are silently skipped.
+        // AVFoundation does not support writing TXXX frames.
+        // Writing support deferred to future TagLib-based adapter.
         throw CoreError.unsupported(
             "Tag writing is not supported. " +
             "iOS: sandbox restrictions. macOS: deferred."
@@ -567,6 +570,7 @@ public final class AVMutableTagWriterAdapter: TagWriterPort {
 **Rationale:**
 - iOS: Sandbox restrictions prevent file writes
 - macOS: Support deferred to future version
+- ReplayGain: AVFoundation cannot write TXXX frames; future TagLib adapter planned
 
 ---
 

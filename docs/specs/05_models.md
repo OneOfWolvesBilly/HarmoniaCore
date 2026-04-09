@@ -119,11 +119,24 @@ Contains metadata tags extracted from or to be written to an audio file.
 | `artist` | `String?` | Primary artist | "Queen" |
 | `album` | `String?` | Album name | "A Night at the Opera" |
 | `albumArtist` | `String?` | Album artist (may differ from artist) | "Queen" |
+| `composer` | `String?` | Composer / songwriter | "Freddie Mercury" |
 | `genre` | `String?` | Musical genre | "Rock" |
 | `year` | `Int?` | Release year | 1975 |
 | `trackNumber` | `Int?` | Track number on album | 11 |
+| `trackTotal` | `Int?` | Total tracks on album | 12 |
 | `discNumber` | `Int?` | Disc number in multi-disc set | 1 |
+| `discTotal` | `Int?` | Total discs in set | 2 |
+| `bpm` | `Int?` | Beats per minute | 120 |
+| `replayGainTrack` | `Double?` | ReplayGain track gain in dB | -3.21 |
+| `replayGainAlbum` | `Double?` | ReplayGain album gain in dB | -1.50 |
+| `comment` | `String?` | Free-form comment | "Live at Carnegie Hall" |
 | `artworkData` | `Data?` / `ByteArray?` | Embedded cover art (raw image bytes) | JPEG/PNG data |
+
+> **ReplayGain fields — current status: read-only**
+> `replayGainTrack` and `replayGainAlbum` are populated by `TagReaderPort`
+> when present in the audio file (ID3 TXXX frames, Vorbis REPLAYGAIN_* comments).
+> Current `TagWriterPort` implementations do not write these fields.
+> Writing support is deferred to a future TagLib-based adapter.
 
 ### Semantics
 
@@ -179,10 +192,17 @@ struct TagBundle {
     std::optional<std::string> artist;
     std::optional<std::string> album;
     std::optional<std::string> album_artist;
+    std::optional<std::string> composer;
     std::optional<std::string> genre;
-    std::optional<int> year;
-    std::optional<int> track_number;
-    std::optional<int> disc_number;
+    std::optional<int>         year;
+    std::optional<int>         track_number;
+    std::optional<int>         track_total;
+    std::optional<int>         disc_number;
+    std::optional<int>         disc_total;
+    std::optional<int>         bpm;
+    std::optional<double>      replay_gain_track;
+    std::optional<double>      replay_gain_album;
+    std::optional<std::string> comment;
     std::optional<std::vector<uint8_t>> artwork_data;
 
     bool operator==(const TagBundle&) const = default;
