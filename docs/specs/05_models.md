@@ -33,9 +33,9 @@ Describes an audio stream's format and duration.
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
-| `duration` | `Double` | Duration in seconds | `â‰¥ 0.0`, may be `INFINITY` for streams |
+| `duration` | `Double` | Duration in seconds | `≥ 0.0`, may be `INFINITY` for streams |
 | `sampleRate` | `Double` | Sample rate in Hz | Common: 44100.0, 48000.0, 88200.0, 96000.0, 192000.0 |
-| `channels` | `Int` | Number of audio channels | `â‰¥ 1`, typically 1 (mono) or 2 (stereo) |
+| `channels` | `Int` | Number of audio channels | `≥ 1`, typically 1 (mono) or 2 (stereo) |
 | `bitDepth` | `Int` | Bit depth per sample | Common: 16, 24, 32 (for PCM formats) |
 
 ### Semantics
@@ -62,7 +62,7 @@ public struct StreamInfo: Sendable, Equatable {
     public let sampleRate: Double
     public let channels: Int
     public let bitDepth: Int
-    
+
     public init(duration: Double, sampleRate: Double, channels: Int, bitDepth: Int) {
         self.duration = duration
         self.sampleRate = sampleRate
@@ -79,7 +79,7 @@ struct StreamInfo {
     double sample_rate;
     int channels;
     int bit_depth;
-    
+
     bool operator==(const StreamInfo&) const = default;
 };
 ```
@@ -132,29 +132,24 @@ Contains metadata tags extracted from or to be written to an audio file.
 
 - **Nil vs Empty String Rule (CRITICAL FOR PARITY):**  
   Missing tags MUST be represented as `nil`/`null`, NOT empty string `""`.  
-  Empty string `""` is a valid tag value (e.g., intentionally blank title).  
-  
-  **Examples:**
-  - No title tag in file → `bundle.title = nil` (correct)
-  - No title tag in file → `bundle.title = ""` (WRONG - confuses absence with empty)
-  - File has empty title tag → `bundle.title = ""` (correct - represents actual empty tag)
+  Empty string `""` is a valid tag value (e.g., intentionally blank title).
 
 - **String Encoding:**  
   All strings MUST be UTF-8 encoded.
 
 - **artworkData:**  
   Raw image bytes (typically JPEG or PNG). Implementations SHOULD detect image format from magic bytes.  
-  Size limit: Recommended â‰¤ 10 MB per file format specifications.
+  Size limit: Recommended ≤ 10 MB per file format specifications.
 
 ### Cross-Platform Consistency
 
 - Tag names MUST map consistently across platforms:
-  - ID3v2 `TIT2` â†’ `title`
-  - ID3v2 `TPE1` â†’ `artist`
-  - Vorbis `TITLE` â†’ `title`
-  - Vorbis `ARTIST` â†’ `artist`
-  - MP4 `Â©nam` â†’ `title`
-  - MP4 `Â©ART` â†’ `artist`
+  - ID3v2 `TIT2` → `title`
+  - ID3v2 `TPE1` → `artist`
+  - Vorbis `TITLE` → `title`
+  - Vorbis `ARTIST` → `artist`
+  - MP4 `©nam` → `title`
+  - MP4 `©ART` → `artist`
 
 - Missing tags MUST result in `nil`/`null` fields, NOT empty strings.
 
@@ -172,7 +167,7 @@ public struct TagBundle: Sendable, Equatable {
     public var trackNumber: Int?
     public var discNumber: Int?
     public var artworkData: Data?
-    
+
     public init() {}
 }
 ```
@@ -189,7 +184,7 @@ struct TagBundle {
     std::optional<int> track_number;
     std::optional<int> disc_number;
     std::optional<std::vector<uint8_t>> artwork_data;
-    
+
     bool operator==(const TagBundle&) const = default;
 };
 ```
@@ -229,6 +224,168 @@ struct TagBundle {
 
 ---
 
+## CueTrack
+
+Represents a single track entry parsed from a CUE sheet.
+
+### Fields
+
+| Field | Type | Description | Constraints |
+|-------|------|-------------|-------------|
+| `index` | `Int` | Track number as declared in the CUE sheet | `≥ 1` |
+| `title` | `String?` | Track title from `TITLE` field | Optional |
+| `performer` | `String?` | Track performer from `PERFORMER` field | Optional |
+| `startTime` | `Double` | Track start position in seconds | `≥ 0.0` |
+| `endTime` | `Double?` | Track end position in seconds | `> startTime` if present; `nil` means play to EOF |
+
+### Semantics
+
+- **index:**  
+  The `TRACK nn AUDIO` number from the CUE sheet. Starts at 1. Sequential but may not be contiguous.
+
+- **title / performer:**  
+  Sourced from per-track `TITLE` / `PERFORMER` fields in the CUE sheet.  
+  Fall back to sheet-level values if per-track values are absent.
+
+- **startTime:**  
+  Derived from the `INDEX 01` timestamp of this track, converted from CUE MM:SS:FF format
+  (frames = 1/75 second) to seconds.  
+  Formula: `seconds = MM * 60 + SS + FF / 75.0`
+
+- **endTime:**  
+  Derived from the `INDEX 01` timestamp of the next track, minus one frame (1/75 s).  
+  For the last track, `endTime` is `nil` (play to EOF of the audio file).
+
+### Illustrative Shapes
+
+**Swift:**
+```swift
+public struct CueTrack: Sendable, Equatable {
+    public let index: Int
+    public let title: String?
+    public let performer: String?
+    public let startTime: Double
+    public let endTime: Double?
+
+    public init(index: Int, title: String?, performer: String?,
+                startTime: Double, endTime: Double?) {
+        self.index = index
+        self.title = title
+        self.performer = performer
+        self.startTime = startTime
+        self.endTime = endTime
+    }
+}
+```
+
+**C++:**
+```cpp
+struct CueTrack {
+    int index;
+    std::optional<std::string> title;
+    std::optional<std::string> performer;
+    double start_time;
+    std::optional<double> end_time;
+
+    bool operator==(const CueTrack&) const = default;
+};
+```
+
+### Parity Requirements
+
+**Exact Match Required:**
+- `index`, `startTime`, `endTime` MUST be identical across platforms for the same `.cue` file
+- `startTime` / `endTime` MUST be computed from MM:SS:FF using the formula above; no rounding
+
+**Test Vector Example:**
+```json
+{
+  "operations": [
+    {"type": "parse_cue", "args": {"url": "{fixture_dir}/album.cue"}}
+  ],
+  "assertions": [
+    {"type": "track_count_equals", "expected": 3},
+    {"type": "track_equals", "track_index": 1, "expected": {
+      "index": 1,
+      "startTime": 0.0,
+      "endTime": 185.906
+    }},
+    {"type": "track_equals", "track_index": 3, "expected": {
+      "index": 3,
+      "startTime": 420.0,
+      "endTime": null
+    }}
+  ]
+}
+```
+
+---
+
+## CueSheet
+
+Represents a fully parsed CUE sheet file.
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fileURL` | `String` | Absolute path to the audio file referenced by the CUE sheet |
+| `title` | `String?` | Album title from sheet-level `TITLE` field |
+| `performer` | `String?` | Album performer from sheet-level `PERFORMER` field |
+| `tracks` | `[CueTrack]` | Ordered list of tracks; sorted ascending by `startTime` |
+
+### Semantics
+
+- **fileURL:**  
+  Resolved from the `FILE` directive in the CUE sheet.  
+  Implementations MUST resolve relative paths against the directory containing the `.cue` file.  
+  Implementations MUST NOT verify that the audio file actually exists at parse time.
+
+- **tracks:**  
+  MUST be non-empty. A CUE sheet with zero tracks MUST cause `CueSheetPort.parse()` to throw
+  `CoreError.decodeError`.  
+  MUST be sorted by `startTime` ascending.
+
+### Illustrative Shapes
+
+**Swift:**
+```swift
+public struct CueSheet: Sendable, Equatable {
+    public let fileURL: String
+    public let title: String?
+    public let performer: String?
+    public let tracks: [CueTrack]
+
+    public init(fileURL: String, title: String?, performer: String?,
+                tracks: [CueTrack]) {
+        self.fileURL = fileURL
+        self.title = title
+        self.performer = performer
+        self.tracks = tracks
+    }
+}
+```
+
+**C++:**
+```cpp
+struct CueSheet {
+    std::string file_url;
+    std::optional<std::string> title;
+    std::optional<std::string> performer;
+    std::vector<CueTrack> tracks;
+
+    bool operator==(const CueSheet&) const = default;
+};
+```
+
+### Parity Requirements
+
+**Exact Match Required:**
+- `fileURL`, `tracks` (count and all fields) MUST be identical across platforms for the same file
+- Track ordering MUST be ascending by `startTime`
+
+---
+
 ## CoreError
 
 Unified error enumeration for all recoverable errors in HarmoniaCore.
@@ -241,41 +398,37 @@ Unified error enumeration for all recoverable errors in HarmoniaCore.
 | `invalidState(String)` | Operation invalid in current state | Play with no track loaded, configure while playing |
 | `notFound(String)` | Resource not found | File does not exist, invalid file path |
 | `ioError(underlying?)` | I/O operation failed | Permission denied, disk read error, network failure |
-| `decodeError(String)` | Audio decode failed | Corrupted file, unsupported codec variant |
+| `decodeError(String)` | Audio decode failed | Corrupted file, unsupported codec variant, malformed CUE sheet |
 | `unsupported(String)` | Feature/format not supported | FLAC on standard build, DSD without Pro license, write on iOS |
 
 ### Semantics
 
 - **invalidArgument:**  
   User provided invalid input. Should include parameter name and reason.  
-  Example: `"Invalid seek position: -5.0 (must be â‰¥ 0)"`
+  Example: `"Invalid seek position: -5.0 (must be ≥ 0)"`
 
 - **invalidState:**  
-  Operation is valid but not allowed in current state. Should describe expected state.  
+  Operation is valid but not allowed in current state.  
   Example: `"Cannot play: no track loaded. Call load() first."`
 
 - **notFound:**  
-  Requested resource does not exist. Should include resource identifier.  
+  Requested resource does not exist.  
   Example: `"File not found: /path/to/track.mp3"`
 
 - **ioError:**  
-  Low-level I/O operation failed. MAY wrap underlying platform error for debugging.  
-  Example (Swift): `CoreError.ioError(underlying: posixError)`  
-  Example (C++): `CoreError::IoError("Read failed: " + std::strerror(errno))`
+  Low-level I/O operation failed. MAY wrap underlying platform error for debugging.
 
 - **decodeError:**  
-  Audio decoding failed. Should include position/frame if available.  
-  Example: `"Decode failed at frame 12345: invalid MPEG sync word"`
+  Audio decoding or CUE sheet parsing failed.  
+  Example: `"Malformed CUE sheet: missing FILE directive"`
 
 - **unsupported:**  
-  Feature or format is not available on this platform/build.  
-  Example: `"FLAC decoding not supported in standard builds. Use macOS Pro."`
+  Feature or format is not available on this platform/build.
 
 ### Error Recovery
 
 - All `CoreError` values are **recoverable** - they should not crash the application.
 - Services SHOULD transition to `error` state and allow recovery via `load()` or other operations.
-- Unrecoverable errors (e.g., out-of-memory, programming errors) should use platform-native mechanisms (assertions, exceptions).
 
 ### Illustrative Shapes
 
@@ -306,35 +459,29 @@ class CoreError : public std::exception {
 private:
     CoreErrorType type_;
     std::string message_;
-    
+
 public:
     CoreError(CoreErrorType type, std::string message)
         : type_(type), message_(std::move(message)) {}
-    
+
     CoreErrorType type() const { return type_; }
     const char* what() const noexcept override { return message_.c_str(); }
-    
-    // Factory methods
+
     static CoreError InvalidArgument(std::string msg) {
         return CoreError(CoreErrorType::InvalidArgument, std::move(msg));
     }
-    
     static CoreError InvalidState(std::string msg) {
         return CoreError(CoreErrorType::InvalidState, std::move(msg));
     }
-    
     static CoreError NotFound(std::string msg) {
         return CoreError(CoreErrorType::NotFound, std::move(msg));
     }
-    
     static CoreError IoError(std::string msg) {
         return CoreError(CoreErrorType::IoError, std::move(msg));
     }
-    
     static CoreError DecodeError(std::string msg) {
         return CoreError(CoreErrorType::DecodeError, std::move(msg));
     }
-    
     static CoreError Unsupported(std::string msg) {
         return CoreError(CoreErrorType::Unsupported, std::move(msg));
     }
@@ -345,14 +492,9 @@ public:
 
 **Exact Match Required:**
 - Error **type** (category) MUST be identical for same inputs across platforms
-- Example: Both platforms throw `invalidArgument` for negative seek position
 
 **Flexible:**
 - Error **message** content (can vary by platform)
-- Example:
-  - Swift: `"Invalid seek position: -5.0 (must be ≥ 0)"`
-  - C++: `"Seek position must be non-negative, got -5.0"`
-  - Both acceptable if error type is `invalidArgument`
 
 **Test Vector Example:**
 ```json
@@ -373,20 +515,6 @@ public:
 }
 ```
 
-### Error Mapping Guidelines
-
-See `01_architecture.md` for comprehensive error mapping rules.
-
-**Quick Reference:**
-
-| Platform Error | CoreError | Example |
-|----------------|-----------|---------|
-| POSIX `ENOENT` | `notFound` | File not found |
-| POSIX `EACCES` | `ioError` | Permission denied |
-| AVFoundation `fileNotFound` | `notFound` | File not found |
-| AVFoundation `decoderNotFound` | `unsupported` | Codec not available |
-| FFmpeg `AVERROR_INVALIDDATA` | `decodeError` | Corrupted stream |
-
 ---
 
 ## Additional Types
@@ -398,7 +526,6 @@ Used by `FileAccessPort` to track open file handles.
 **Requirements:**
 - MUST be hashable/comparable for use in collections.
 - MUST be unique per open file operation.
-- Implementation-defined structure (e.g., UUID, integer handle, pointer).
 
 **Swift:**
 ```swift
@@ -411,17 +538,8 @@ public struct FileHandleToken: Hashable, Sendable {
 **C++:**
 ```cpp
 struct FileHandleToken {
-    std::string id; // or int, or void*, implementation-defined
-    
+    std::string id;
     bool operator==(const FileHandleToken&) const = default;
-};
-
-// Specialization for std::hash if needed
-template<>
-struct std::hash<FileHandleToken> {
-    size_t operator()(const FileHandleToken& token) const {
-        return std::hash<std::string>{}(token.id);
-    }
 };
 ```
 
@@ -438,16 +556,14 @@ Used by `DecoderPort` to track open decode sessions.
 ## Thread Safety Considerations
 
 ### Immutable Models
-- `StreamInfo` is immutable â†’ naturally thread-safe.
-- `TagBundle` fields are independent â†’ safe to read concurrently if not mutated.
+- `StreamInfo`, `CueTrack`, `CueSheet` are immutable → naturally thread-safe.
+- `TagBundle` fields are independent → safe to read concurrently if not mutated.
 
 ### Mutable Models
-- `TagBundle` when used for writing â†’ caller must synchronize.
-- Services that hold mutable models â†’ must provide synchronization.
+- `TagBundle` when used for writing → caller must synchronize.
 
 ### Error Handling
-- `CoreError` values are immutable â†’ safe to share across threads.
-- Error propagation across thread boundaries is safe.
+- `CoreError` values are immutable → safe to share across threads.
 
 ---
 
@@ -455,21 +571,33 @@ Used by `DecoderPort` to track open decode sessions.
 
 ### StreamInfo Validation
 ```text
-duration â‰¥ 0.0
+duration ≥ 0.0
 sampleRate > 0.0 (typically 8000.0 .. 384000.0)
-channels â‰¥ 1 (typically 1 or 2, max 8)
-bitDepth â‰¥ 8 (typically 16, 24, 32)
+channels ≥ 1 (typically 1 or 2, max 8)
+bitDepth ≥ 8 (typically 16, 24, 32)
 ```
 
 ### TagBundle Validation
 ```text
-year: if present, 1000 â‰¤ year â‰¤ 9999 (reasonable range)
-trackNumber: if present, trackNumber â‰¥ 1
-discNumber: if present, discNumber â‰¥ 1
-artworkData: if present, size â‰¤ 10 MB (recommended)
+year: if present, 1000 ≤ year ≤ 9999
+trackNumber: if present, trackNumber ≥ 1
+discNumber: if present, discNumber ≥ 1
+artworkData: if present, size ≤ 10 MB (recommended)
 ```
 
-Implementations SHOULD validate inputs and throw `CoreError.invalidArgument` for invalid values.
+### CueTrack Validation
+```text
+index ≥ 1
+startTime ≥ 0.0
+endTime > startTime (if present)
+```
+
+### CueSheet Validation
+```text
+tracks.count ≥ 1
+tracks sorted ascending by startTime
+fileURL must be non-empty
+```
 
 ---
 
