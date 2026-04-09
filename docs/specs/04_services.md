@@ -23,7 +23,7 @@ Code samples are illustrative only.
    FFmpeg, PipeWire, TagLib, or any other platform-specific API.
 
 3. **Minimal stable API surface**  
-   Only core playback functionality is specified here (v0.1).
+   Only core functionality is specified here (v0.1).
    Additional services will be specified in separate documents.
 
 4. **Verifiable behavior**  
@@ -32,7 +32,7 @@ Code samples are illustrative only.
 
 ---
 
-## 4.2 PlaybackService Interface
+## 4.2 PlaybackService
 
 `PlaybackService` is the primary playback control service.
 All platform implementations MUST conform to the behavior defined in this section.
@@ -43,108 +43,53 @@ All platform implementations MUST conform to the behavior defined in this sectio
 
 Normative semantics:
 
-- **`stopped`**  
-  No active playback; resources are released or reset. Position is treated as 0.
-
-- **`playing`**  
-  Audio is being rendered.
-
-- **`paused`**  
-  Playback is suspended; position is retained.
-
-- **`buffering`**  
-  *(Optional)* Waiting for decode/output; implementation MAY use this as a transient state.  
-  **Defined use case:** Implementations MAY transition to `buffering` during the brief
-  EOF drain period after the decoder reaches end-of-file but before the audio engine
-  finishes consuming queued buffers. This prevents playback position observers from
-  misreading early completion. Implementations MUST transition to `stopped` once drain
-  is complete.  
-  **Note:** If used, cross-platform tests MUST account for this state. Prefer deterministic states (`playing`, `paused`) for consistency.
-
-- **`error(CoreError)`**  
-  An error state associated with a `CoreError` value.
-
-Illustrative Swift shape:
-
-```swift
-public enum PlaybackState: Equatable {
-    case stopped
-    case playing
-    case paused
-    case buffering
-    case error(CoreError)
-}
-```
-
-Illustrative C++ shape:
-
-```cpp
-enum class PlaybackState {
-    Stopped,
-    Playing,
-    Paused,
-    Buffering,
-    Error
-};
-
-// For C++, the associated CoreError is typically stored separately
-struct PlaybackStatus {
-    PlaybackState state;
-    std::optional<CoreError> error;
-};
-```
-
-Implementations MAY choose different concrete representations, but MUST preserve
-the semantics defined above.
+- **`stopped`** — No active playback; resources are released. Position is treated as 0.
+- **`playing`** — Audio is being rendered.
+- **`paused`** — Playback is suspended; position is retained.
+- **`buffering`** *(Optional)* — Transient state during EOF drain. MUST transition to `stopped` once drain completes.
+- **`error(CoreError)`** — An error state associated with a `CoreError` value.
 
 **State Transition Rules:**
 
 ```
 [stopped] --load()--> [paused]
-[paused] --play()--> [playing]
+[paused]  --play()--> [playing]
 [playing] --pause()--> [paused]
 [playing/paused] --stop()--> [stopped]
 [any] --error--> [error]
-[error] --load()--> [paused] (recovery)
+[error]  --load()--> [paused]  (recovery)
 ```
 
 **Detailed State Transition Table:**
 
 | Current State | Operation | Valid? | Next State | Notes |
 |--------------|-----------|--------|------------|-------|
-| stopped | load() | ✅ Yes | paused | File opened, ready to play |
-| stopped | play() | ❌ No | - | Throws `invalidState` |
-| stopped | pause() | ✅ Yes | stopped | Idempotent (no-op) |
-| stopped | stop() | ✅ Yes | stopped | Idempotent (no-op) |
-| stopped | seek() | ❌ No | - | Throws `invalidState` |
-| paused | load() | ✅ Yes | paused | Replaces current file |
-| paused | play() | ✅ Yes | playing | Starts playback |
-| paused | pause() | ✅ Yes | paused | Idempotent (no-op) |
-| paused | stop() | ✅ Yes | stopped | Releases resources |
-| paused | seek() | ✅ Yes | paused | Remains paused |
-| playing | load() | ✅ Yes | paused | Stops current, loads new |
-| playing | play() | ✅ Yes | playing | Idempotent (no-op) |
-| playing | pause() | ✅ Yes | paused | Suspends playback |
-| playing | stop() | ✅ Yes | stopped | Stops and releases |
-| playing | seek() | ✅ Yes | playing | Continues playing |
-| error | load() | ✅ Yes | paused | Recovery path |
-| error | play() | ❌ No | - | Throws `invalidState` |
-| error | pause() | ❌ No | - | Throws `invalidState` |
-| error | stop() | ✅ Yes | stopped | Cleanup |
-| error | seek() | ❌ No | - | Throws `invalidState` |
-
-**Key Rules**:
-1. **Idempotent operations**: `play()` while playing, `pause()` while paused, `stop()` while stopped are no-ops
-2. **Invalid operations**: Operations marked ❌ throw `CoreError.invalidState`
-3. **Load replaces**: Calling `load()` in any state (except error) replaces current track
-4. **Error recovery**: Only `load()` and `stop()` are valid in error state
+| stopped | load() | ✅ | paused | File opened, ready to play |
+| stopped | play() | ❌ | — | Throws `invalidState` |
+| stopped | pause() | ✅ | stopped | Idempotent (no-op) |
+| stopped | stop() | ✅ | stopped | Idempotent (no-op) |
+| stopped | seek() | ❌ | — | Throws `invalidState` |
+| paused | load() | ✅ | paused | Replaces current file |
+| paused | play() | ✅ | playing | Starts playback |
+| paused | pause() | ✅ | paused | Idempotent (no-op) |
+| paused | stop() | ✅ | stopped | Releases resources |
+| paused | seek() | ✅ | paused | Remains paused |
+| playing | load() | ✅ | paused | Stops current, loads new |
+| playing | play() | ✅ | playing | Idempotent (no-op) |
+| playing | pause() | ✅ | paused | Suspends playback |
+| playing | stop() | ✅ | stopped | Stops and releases |
+| playing | seek() | ✅ | playing | Continues playing |
+| error | load() | ✅ | paused | Recovery path |
+| error | play() | ❌ | — | Throws `invalidState` |
+| error | pause() | ❌ | — | Throws `invalidState` |
+| error | stop() | ✅ | stopped | Cleanup |
+| error | seek() | ❌ | — | Throws `invalidState` |
 
 ---
 
 ### 4.2.2 Required API Surface
 
-The following members are REQUIRED for `PlaybackService`
-(terms are language-neutral; error signaling may use exceptions or error types):
+The following members are REQUIRED for `PlaybackService`:
 
 1. `load(url: String)`
 2. `play()`
@@ -154,189 +99,155 @@ The following members are REQUIRED for `PlaybackService`
 6. `currentTime() -> Double`
 7. `duration() -> Double`
 8. `state: PlaybackState` (read-only)
+9. `setVolume(volume: Float)`
+10. `setPlaybackRange(start: Double, end: Double?)`
+11. `clearPlaybackRange()`
 
 ---
 
 #### 4.2.2.1 `load(url: String)`
 
-- Uses configured Ports (such as `FileAccessPort` and `DecoderPort`) to open and prepare a track.
-- On success:
-  - Prepares audio output as needed.
-  - Sets `state = paused` (track loaded but not yet playing).
-  - Resets `currentTime()` to `0`.
-  - Initializes `duration()` from `StreamInfo`.
-- On failure:
-  - Signals an appropriate `CoreError` (`ioError`, `unsupported`, etc.).
-  - Sets `state = error(CoreError)`.
-  - MUST NOT leave the service in an inconsistent state (e.g., partially loaded).
+- Prepares audio output and sets `state = paused`.
+- Resets `currentTime()` to `0`.
+- Resets any active playback range set by `setPlaybackRange()`.
+- Initializes `duration()` from `StreamInfo`.
 
 **Error Cases:**
-- File not found â†’ `CoreError.notFound`
-- Unsupported format â†’ `CoreError.unsupported`
-- Corrupted file â†’ `CoreError.decodeError`
-- I/O error â†’ `CoreError.ioError`
-
-**Thread Safety:** May be called from any thread. Implementations MUST synchronize internal state.
-
-### Buffer Size
-
-Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
-sample rate, targeting approximately 100ms of audio per buffer, rounded to the
-nearest power of two. This avoids truncation or silence caused by a fixed buffer
-size that does not match the decoded stream's frame count.
-
-Examples:
-- 44100 Hz → 4096 frames (~93ms)
-- 48000 Hz → 4096 frames (~85ms)
-- 96000 Hz → 8192 frames (~85ms)
-- 22050 Hz → 2048 frames (~93ms)
-
-### Seek and Audio Output Flushing
-
-When `seek(to:)` is called while the service is playing, implementations MUST
-call `AudioOutputPort.flush()` before submitting new decoded audio to the output.
-This prevents stale audio from the pre-seek position from being heard after the
-seek completes.
+- File not found → `CoreError.notFound`
+- Unsupported format → `CoreError.unsupported`
+- Corrupted file → `CoreError.decodeError`
 
 ---
 
 #### 4.2.2.2 `play()`
 
-- If a track is loaded and `state` is `paused` or `stopped`:
-  - Starts playback via `AudioOutputPort`.
-  - Sets `state = playing`.
-  - Begins advancing `currentTime()`.
-- If `state` is already `playing`:
-  - MUST be a no-op (idempotent).
-- If no track is loaded (`state = stopped` and no file loaded):
-  - MUST signal `CoreError.invalidState`.
-
-**Error Cases:**
-- No track loaded â†’ `CoreError.invalidState("No track loaded")`
-- Audio device unavailable â†’ `CoreError.ioError`
-
-**Thread Safety:** May be called from any thread. Implementations MUST synchronize with audio rendering.
+- If `state` is `paused`: starts playback, sets `state = playing`.
+- If `state` is already `playing`: no-op.
+- If no track loaded: throws `CoreError.invalidState`.
 
 ---
 
 #### 4.2.2.3 `pause()`
 
-- If `state` is `playing`:
-  - Suspends playback via `AudioOutputPort`.
-  - Retains current position.
-  - Sets `state = paused`.
-- If `state` is already `paused` or `stopped`:
-  - MUST be a no-op (idempotent).
-
-**Error Cases:** None (always succeeds).
-
-**Thread Safety:** May be called from any thread.
+- If `state` is `playing`: suspends playback, retains position, sets `state = paused`.
+- If already `paused` or `stopped`: no-op.
 
 ---
 
 #### 4.2.2.4 `stop()`
 
-- If `state` is `playing` or `paused`:
-  - Stops playback via `AudioOutputPort`.
-  - Releases decoder/output resources as appropriate.
-  - Resets position to `0`.
-  - Sets `state = stopped`.
-- If already `stopped`:
-  - MUST be a no-op (idempotent).
-
-**Error Cases:** None (always succeeds).
-
-**Thread Safety:** May be called from any thread.
+- Stops playback, releases decoder/output resources, resets position to `0`.
+- Clears any active playback range.
+- If already `stopped`: no-op.
 
 ---
 
 #### 4.2.2.5 `seek(to seconds: Double)`
 
-- If a track is loaded and the underlying `DecoderPort` supports seeking:
-  - Moves playback position to the requested time.
-  - Updates the internal position used by `currentTime()`.
-  - If `playing`, continues playing from new position.
-  - If `paused`, remains paused at new position.
-- If `seconds` is negative or beyond `duration()`:
-  - MUST signal `CoreError.invalidArgument`.
-- If seeking is not supported by the decoder:
-  - MUST signal `CoreError.unsupported`.
-- If no track is loaded:
-  - MUST signal `CoreError.invalidState`.
-
-**Error Cases:**
-- Invalid position â†’ `CoreError.invalidArgument`
-- Seeking not supported â†’ `CoreError.unsupported`
-- No track loaded â†’ `CoreError.invalidState`
-- Seek failed â†’ `CoreError.decodeError`
-
-**Thread Safety:** May be called from any thread. Implementations MUST synchronize with decoding.
+- Moves playback position to the requested time.
+- MUST call `AudioOutputPort.flush()` before submitting new decoded audio.
+- `seek()` MUST NOT modify the active playback range.
+- Throws `CoreError.invalidArgument` if `seconds` is negative or beyond `duration()`.
+- Throws `CoreError.unsupported` if seeking is not supported.
+- Throws `CoreError.invalidState` if no track is loaded.
 
 **Seek Accuracy (Parity Requirement):**
-- Implementation SHOULD seek to within ±1ms of requested position for uncompressed formats (WAV, AIFF)
-- For compressed formats (MP3, AAC), tolerance of ±100ms is acceptable due to keyframe spacing
-- Actual position after seek may differ by codec keyframe spacing
-
-**Edge Cases:**
-- `seek(0.0)` - Beginning of file (valid)
-- `seek(duration())` - Throws `invalidArgument` (at EOF, cannot read)
-- `seek(duration() - 0.001)` - Near end (valid)
-- `seek(-1.0)` - Throws `invalidArgument` (negative)
-- `seek(∞)` or `seek(NaN)` - Throws `invalidArgument`
-
-**State Preservation:**
-- If `paused` before seek, remains `paused` after
-- If `playing` before seek, continues `playing` after
+- Uncompressed formats (WAV, AIFF): within ±1ms
+- Compressed formats (MP3, AAC): ±100ms tolerance
 
 ---
 
 #### 4.2.2.6 `currentTime() -> Double`
 
-- When `state` is `playing`:
-  - Returns the current playback position in seconds (continuously advancing).
-- When `state` is `paused`:
-  - Returns the last known playback position (frozen).
-- When `state` is `stopped`:
-  - Returns `0`.
-- When `state` is `error`:
-  - Returns the last known position or `0` (implementation-defined, but MUST be documented).
-
-**Return Value:**
-- Range: `[0.0, duration()]`
-- Precision: Should reflect actual audio rendering position, not decode position.
-
-**Thread Safety:** Must be safe to call from any thread concurrently.
+- `playing`: returns current rendering position in seconds (continuously advancing).
+- `paused`: returns last known position (frozen).
+- `stopped`: returns `0`.
+- Range: `[0.0, duration()]`.
 
 ---
 
 #### 4.2.2.7 `duration() -> Double`
 
-- When a track is loaded:
-  - Returns the total duration of the track in seconds.
-- When no track is loaded (`state = stopped` and no file loaded):
-  - Returns `0`.
-
-**Return Value:**
-- Range: `[0.0, infinity)` for finite-length tracks
-- May return `INFINITY` for streaming sources (future extension)
-
-**Thread Safety:** Must be safe to call from any thread concurrently.
+- Returns total duration of loaded track, or `0` when no track is loaded.
 
 ---
 
 #### 4.2.2.8 `state: PlaybackState`
 
-- Exposes the current playback state as defined in 4.2.1.
-- MUST always reflect the last completed operation.
-- MUST be updated atomically with respect to other operations.
-
-**Thread Safety:** Must be safe to read from any thread concurrently.
+- Exposes current playback state. MUST be updated atomically. Thread-safe for concurrent reads.
 
 ---
 
-### 4.2.3 Reference Interface Shapes
+#### 4.2.2.9 `setVolume(volume: Float)`
 
-These are non-normative examples showing how the contract can be expressed.
+- Sets the playback volume.
+- `volume` range: `[0.0, 1.0]`. Values outside this range MUST be clamped.
+- Safe to call in any state, including `stopped`.
+- Thread Safety: MAY be called from any thread.
+
+---
+
+#### 4.2.2.10 `setPlaybackRange(start: Double, end: Double?)`
+
+Sets a time-bounded playback region. When active, playback is confined to
+`[start, end]` within the loaded file.
+
+**Parameters:**
+- `start`: Start position in seconds. MUST be `≥ 0.0` and `< duration()`.
+- `end`: End position in seconds. If not `nil`, MUST be `> start` and `≤ duration()`.
+  `nil` means play from `start` to EOF.
+
+**Behavior:**
+- `setPlaybackRange()` MUST be called after `load()`. It MUST NOT be called when
+  `state = stopped` with no file loaded.
+- When a range is active:
+  - `seek()` to a position outside `[start, end]` MUST throw `CoreError.invalidArgument`.
+  - When `currentTime()` reaches `end`, the service MUST automatically transition to
+    `state = paused` and set `currentTime()` to `start`.
+  - `currentTime()` MUST remain within `[start, end]`.
+  - `duration()` continues to return the full file duration (unchanged).
+- Calling `load()` clears any active range.
+
+**Error Cases:**
+- `start < 0` or `start ≥ duration()` → `CoreError.invalidArgument`
+- `end ≤ start` or `end > duration()` → `CoreError.invalidArgument`
+- No track loaded → `CoreError.invalidState`
+
+**Illustrative Swift shape:**
+```swift
+func setPlaybackRange(start: Double, end: Double?) throws
+```
+
+**Illustrative C++ shape:**
+```cpp
+virtual void setPlaybackRange(double start, std::optional<double> end) = 0;
+```
+
+---
+
+#### 4.2.2.11 `clearPlaybackRange()`
+
+- Removes any active playback range previously set by `setPlaybackRange()`.
+- After clearing, the service plays the full file from the current position.
+- Safe to call when no range is active (no-op).
+- MUST NOT throw.
+
+---
+
+### 4.2.3 Buffer Size
+
+Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
+sample rate, targeting approximately 100ms of audio per buffer, rounded to the
+nearest power of two.
+
+Examples:
+- 44100 Hz → 4096 frames (~93ms)
+- 48000 Hz → 4096 frames (~85ms)
+- 96000 Hz → 8192 frames (~85ms)
+
+---
+
+### 4.2.4 Reference Interface Shapes
 
 **Swift example:**
 
@@ -344,13 +255,17 @@ These are non-normative examples showing how the contract can be expressed.
 public protocol PlaybackService: AnyObject {
     func load(url: URL) throws
     func play() throws
-    func pause() throws
+    func pause()
     func stop()
     func seek(to seconds: Double) throws
-    
+
     func currentTime() -> Double
     func duration() -> Double
     var state: PlaybackState { get }
+
+    func setVolume(_ volume: Float)
+    func setPlaybackRange(start: Double, end: Double?) throws
+    func clearPlaybackRange()
 }
 ```
 
@@ -370,64 +285,80 @@ public:
     virtual double currentTime() const = 0;
     virtual double duration() const = 0;
     virtual PlaybackState state() const = 0;
+
+    virtual void setVolume(float volume) = 0;
+    virtual void setPlaybackRange(double start, std::optional<double> end) = 0;
+    virtual void clearPlaybackRange() = 0;
 };
 ```
 
-Any implementation MUST satisfy the semantics in 4.2.2, regardless of syntax.
+---
+
+## 4.3 CueSheetService
+
+`CueSheetService` provides CUE sheet parsing as a composable service.
+It wraps `CueSheetPort` and exposes the result to the application layer.
+
+### 4.3.1 Goals
+
+- Parse a `.cue` file and return a `CueSheet` with a list of `CueTrack` entries.
+- Decouple the application from the raw `CueSheetPort` interface.
+- Remain independently testable via a mock `CueSheetPort`.
+
+### 4.3.2 Required API Surface
+
+```text
+1. parse(url: String) throws -> CueSheet
+```
 
 ---
 
-## 4.3 Relationship to Ports
+#### 4.3.2.1 `parse(url: String) throws -> CueSheet`
 
-A `PlaybackService` implementation MUST use only the following Ports:
-
-- **`DecoderPort`** (required) - Decodes audio files to PCM
-- **`AudioOutputPort`** (required) - Outputs PCM to audio hardware
-- **`ClockPort`** (required) - Provides timing for position tracking
-- **`LoggerPort`** (required) - Logs events for debugging
-- **`FileAccessPort`** (optional) - May be used for direct file access if needed
-- **`TagReaderPort`** (optional) - May be used to expose metadata alongside playback
-
-**Constraints:**
-
-1. `PlaybackService` MUST NOT reference AVFoundation, FFmpeg, PipeWire,
-   TagLib, or any other platform-specific APIs directly.
-
-2. `PlaybackService` MUST NOT construct platform adapters directly.
-   Platform-specific adapters MUST be provided (injected) by the composition root.
-
-All platform details (AVFoundation, FFmpeg, etc.) MUST be confined to Adapter
-implementations of the Ports.
+- Delegates to the injected `CueSheetPort.parse()`.
+- Returns a fully populated `CueSheet` (see `05_models.md`).
+- Throws `CoreError.notFound` if the `.cue` file does not exist.
+- Throws `CoreError.ioError` for I/O errors.
+- Throws `CoreError.decodeError` if the CUE sheet is malformed.
+- Thread Safety: Safe to call concurrently.
 
 ---
 
-## 4.4 Composition / Factory
+### 4.3.3 Relationship to PlaybackService
 
-Concrete service instances are created by a composition root (factory).
+`CueSheetService` and `PlaybackService` are independent services.
+The application layer orchestrates them together:
 
-Responsibilities of the composition root:
+```text
+1. cueSheetService.parse(url) → CueSheet
+2. User selects a CueTrack
+3. playbackService.load(audioURL)
+4. playbackService.setPlaybackRange(start: track.startTime, end: track.endTime)
+5. playbackService.play()
+```
 
-1. Construct platform-specific adapters (e.g. AVFoundation-based, FFmpeg-based).
-2. Wire these adapters into a concrete `PlaybackService` implementation that
-   depends only on Ports.
-3. Expose factory functions such as (examples, non-normative):
+`CueSheetService` has no dependency on `PlaybackService` and vice versa.
+
+---
+
+### 4.3.4 Reference Interface Shapes
 
 **Swift example:**
 
 ```swift
-public enum CoreFactory {
-    public static func makeDefaultPlaybackService() -> PlaybackService {
-        let logger = OSLogAdapter()
-        let clock = MonotonicClockAdapter()
-        let decoder = AVAssetReaderDecoderAdapter(logger: logger)
-        let audio = AVAudioEngineOutputAdapter(logger: logger)
-        
-        return DefaultPlaybackService(
-            decoder: decoder,
-            audio: audio,
-            clock: clock,
-            logger: logger
-        )
+public protocol CueSheetService: AnyObject {
+    func parse(url: URL) throws -> CueSheet
+}
+
+final class DefaultCueSheetService: CueSheetService {
+    private let port: CueSheetPort
+
+    init(port: CueSheetPort) {
+        self.port = port
+    }
+
+    func parse(url: URL) throws -> CueSheet {
+        try port.parse(url: url.path)
     }
 }
 ```
@@ -435,178 +366,175 @@ public enum CoreFactory {
 **C++ example:**
 
 ```cpp
-class LinuxCoreFactory {
+class CueSheetService {
 public:
-    static std::unique_ptr<PlaybackService> makePlaybackService() {
-        auto logger = std::make_shared<StdErrLogger>();
-        auto clock = std::make_shared<SteadyClockAdapter>();
-        auto decoder = std::make_unique<FFmpegDecoderAdapter>(logger);
-        auto audio = std::make_unique<PipeWireOutputAdapter>(logger);
-        
-        return std::make_unique<DefaultPlaybackService>(
-            std::move(decoder),
-            std::move(audio),
-            clock,
-            logger
-        );
+    virtual ~CueSheetService() = default;
+    virtual CueSheet parse(const std::string& url) = 0;
+};
+
+class DefaultCueSheetService : public CueSheetService {
+    std::shared_ptr<CueSheetPort> port_;
+public:
+    explicit DefaultCueSheetService(std::shared_ptr<CueSheetPort> port)
+        : port_(std::move(port)) {}
+
+    CueSheet parse(const std::string& url) override {
+        return port_->parse(url);
     }
 };
 ```
 
-The specification does not mandate specific factory names, only that such
-factories exist and respect the dependency rules above.
+---
+
+## 4.4 Relationship to Ports
+
+### PlaybackService Port Dependencies
+
+| Port | Required | Purpose |
+|------|----------|---------|
+| `DecoderPort` | Required | Decodes audio files to PCM |
+| `AudioOutputPort` | Required | Outputs PCM to audio hardware |
+| `ClockPort` | Required | Provides timing for position tracking |
+| `LoggerPort` | Required | Logs events for debugging |
+| `FileAccessPort` | Optional | Direct file access if needed |
+
+### CueSheetService Port Dependencies
+
+| Port | Required | Purpose |
+|------|----------|---------|
+| `CueSheetPort` | Required | Parses `.cue` files |
+| `LoggerPort` | Optional | Logs parsing events |
+
+**Constraints:**
+- Services MUST NOT reference AVFoundation, FFmpeg, PipeWire, TagLib, or any
+  other platform-specific APIs directly.
+- Platform-specific adapters MUST be provided via dependency injection.
 
 ---
 
-## 4.5 State Machine Diagram
+## 4.5 Composition / Factory
+
+**Swift example (updated):**
+
+```swift
+public enum CoreFactory {
+    public static func makeDefaultPlaybackService() -> PlaybackService {
+        let logger  = OSLogAdapter(subsystem: "HarmoniaCore", category: "Playback")
+        let clock   = MonotonicClockAdapter()
+        let decoder = AVAssetReaderDecoderAdapter(logger: logger)
+        let audio   = AVAudioEngineOutputAdapter(logger: logger)
+        return DefaultPlaybackService(
+            decoder: decoder,
+            audio:   audio,
+            clock:   clock,
+            logger:  logger
+        )
+    }
+
+    public static func makeDefaultCueSheetService() -> CueSheetService {
+        let port = NativeCueSheetAdapter()
+        return DefaultCueSheetService(port: port)
+    }
+}
+```
+
+---
+
+## 4.6 State Machine Diagram (PlaybackService)
 
 ```
-                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                    â”‚ stopped â”‚ (initial state)
-                    â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜
-                         â”‚ load()
-                         â–¼
-                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              â”Œâ”€â”€â”€â”€â–¶â”‚ paused  â”‚â—€â”€â”€â”€â”€â”
-              â”‚     â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜     â”‚
-        pause()â”‚         â”‚ play()   â”‚ pause()
-              â”‚         â–¼           â”‚
-              â”‚     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”     â”‚
-              â””â”€â”€â”€â”€â”€â”‚ playing â”‚â”€â”€â”€â”€â”€â”˜
-                    â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”˜
-                         â”‚ stop()
-                         â–¼
-                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                    â”‚ stopped â”‚
-                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                    
-                         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-              (any) â”€â”€â”€â”€â–¶â”‚ error   â”‚
-                         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                              â”‚ load() (recovery)
-                              â–¼
-                         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-                         â”‚ paused  â”‚
-                         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                    ┌─────────┐
+                    │ stopped │ (initial state)
+                    └────┬────┘
+                         │ load()
+                         ▼
+                    ┌─────────┐
+              ┌────▶│ paused  │◀─────┐
+              │     └────┬────┘      │
+        pause()│         │ play()    │ pause()
+              │         ▼           │
+              │     ┌─────────┐     │
+              └─────│ playing │─────┘
+                    └────┬────┘
+                         │ stop()
+                         ▼
+                    ┌─────────┐
+                    │ stopped │
+                    └─────────┘
+
+                         ┌─────────┐
+              (any) ────▶│ error   │
+                         └────┬────┘
+                              │ load() (recovery)
+                              ▼
+                         ┌─────────┐
+                         │ paused  │
+                         └─────────┘
 ```
 
 **Notes:**
-- `seek()` can be called in any state where a track is loaded (paused/playing), does not change state
-- `stop()` is idempotent (can be called from stopped state)
-- `play()` and `pause()` are idempotent (no-op if already in target state)
-- `buffering` state (if used) is a transient state between paused/playing
+- `setPlaybackRange()` does not change state; it constrains the active playback window.
+- `seek()` respects active playback range; seeks outside the range throw `invalidArgument`.
+- `load()` always clears any active playback range.
 
 ---
 
-## 4.6 Error Handling Strategy
+## 4.7 Error Handling Strategy
 
-Services MUST handle errors according to these principles:
-
-1. **Graceful Degradation**  
-   Errors SHOULD NOT crash the application. Set `state = error(...)` and allow recovery.
-
-2. **Clear Error Messages**  
-   All `CoreError` values MUST include descriptive messages for debugging.
-
-3. **Recovery Support**  
-   After entering `error` state, calling `load()` with a valid file SHOULD allow recovery.
-
-4. **Thread Safety**  
-   Error handling MUST be thread-safe. Errors may originate from any thread (e.g., audio callback, decoder thread).
+1. **Graceful Degradation** — Errors SHOULD NOT crash the application.
+2. **Clear Error Messages** — All `CoreError` values MUST include descriptive messages.
+3. **Recovery Support** — After `error` state, calling `load()` with a valid file SHOULD allow recovery.
+4. **Thread Safety** — Error handling MUST be thread-safe.
 
 ---
 
-## 4.7 Performance Considerations
+## 4.8 Performance Considerations
 
 ### Real-Time Audio Thread
-
 - `AudioOutputPort.render()` is called from a real-time audio thread.
-- Services MUST ensure the audio callback remains real-time safe:
-  - No memory allocations
-  - No blocking operations
-  - No lock contention
-  - Use lock-free queues for inter-thread communication
+- Services MUST ensure the audio callback remains real-time safe (no allocations, no blocking).
 
 ### Decoder Threading
-
-- Decoding SHOULD occur on a background thread to avoid blocking the audio thread.
-- Services SHOULD maintain a decode-ahead buffer to prevent underruns.
-- Buffer size SHOULD be configurable (e.g., 2-5 seconds of audio).
+- Decoding SHOULD occur on a background thread.
+- Services SHOULD maintain a decode-ahead buffer (2–5 seconds recommended).
 
 ### Position Tracking
-
 - `currentTime()` SHOULD reflect actual render position, not decode position.
-- Use `ClockPort` for accurate timing measurements.
 
 ---
 
-## 4.8 Future Services (Reserved)
+## 4.9 Future Services (Reserved)
 
 The following services are candidates for future specifications.
-They are NOT required for the current version, but any future definition
-MUST follow the same principles (cross-platform, ports-driven, testable):
+Each MUST follow the same principles (cross-platform, ports-driven, testable):
 
 ### LibraryService
 - Library scanning, indexing, and queries
-- Persistent metadata cache
-- Search and filtering
 
 ### TagEditingService
 - Cross-platform metadata editing using `TagWriterPort`
-- Batch editing operations
-- Undo/redo support
 
 ### QueueService
-- Playlist / playback queue management
-- Shuffle and repeat modes
-- Queue persistence
-
-### SearchService
-- Full-text search across library and metadata
-- Advanced filtering
-- Search result ranking
+- Playlist / playback queue management with shuffle and repeat
 
 ### EqualizerService
-- Real-time audio effects
-- Preset management
-- Per-track EQ settings
-
-Each future Service MUST:
-
-1. Be defined in its own numbered spec document.
-2. Depend only on Ports and Models.
-3. Be implementable on all supported platforms with equivalent semantics.
-4. Include comprehensive behavior tests.
+- Real-time audio effects and preset management
 
 ---
 
-## 4.9 Testing Requirements
+## 4.10 Testing Requirements
 
-All `PlaybackService` implementations MUST pass the following test categories:
+### PlaybackService Tests
+- All valid state transitions work correctly
+- Idempotent operations remain idempotent
+- `setPlaybackRange` constrains position correctly
+- Automatic pause at range end, position resets to range start
+- `seek()` outside active range throws `invalidArgument`
+- `load()` clears active range
 
-### State Transition Tests
-- Verify all valid state transitions work correctly
-- Verify idempotent operations remain idempotent
-- Verify invalid transitions throw appropriate errors
-
-### Playback Tests
-- Load and play various audio formats
-- Verify audio output matches expected waveform (Â±1 sample tolerance)
-- Verify position tracking accuracy
-- Verify seek accuracy
-
-### Error Handling Tests
-- Missing file â†’ `CoreError.notFound`
-- Unsupported format â†’ `CoreError.unsupported`
-- Corrupted file â†’ `CoreError.decodeError`
-- Recovery after error state
-
-### Thread Safety Tests
-- Concurrent calls from multiple threads
-- No race conditions or deadlocks
-- Consistent state under concurrent access
-
-### Performance Tests
-- Audio callback real-time safety
-- Memory usage stability
-- CPU usage within acceptable limits
+### CueSheetService Tests
+- Correctly parses a well-formed CUE sheet
+- Returns correct `startTime` / `endTime` for each track
+- Last track has `endTime = nil`
+- Throws `decodeError` for malformed input
+- Throws `notFound` for missing file
