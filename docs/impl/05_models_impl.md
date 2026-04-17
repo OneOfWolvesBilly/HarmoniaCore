@@ -35,47 +35,121 @@ public struct StreamInfo: Sendable, Equatable {
 
 ```swift
 public struct TagBundle: Sendable, Equatable {
+
+    /// Current schema version. HarmoniaPlayer compares this against its
+    /// persisted `metadataVersion` to decide when to trigger a background
+    /// metadata re-read for tracks saved by an older schema.
+    ///
+    /// History:
+    /// - 0: legacy (no technical info fields)
+    /// - 1: added duration, bitrate, sampleRate, channels, fileSize
+    public static let currentSchemaVersion: Int = 1
+
+    // MARK: - Tag Fields
+
     public var title: String?
     public var artist: String?
     public var album: String?
     public var albumArtist: String?
+    public var composer: String?
     public var genre: String?
     public var year: Int?
     public var trackNumber: Int?
+    public var trackTotal: Int?
     public var discNumber: Int?
+    public var discTotal: Int?
+    public var bpm: Int?
+    public var replayGainTrack: Double?
+    public var replayGainAlbum: Double?
+    public var comment: String?
     public var artworkData: Data?
-    
+
+    // MARK: - Technical Info Fields
+    //
+    // These fields describe audio stream and file properties read alongside
+    // tags from the same AVURLAsset. They are NOT tag metadata in the
+    // ID3 / MP4 sense and are intentionally excluded from `isEmpty`.
+
+    public var duration: TimeInterval?
+    public var bitrate: Int?
+    public var sampleRate: Double?
+    public var channels: Int?
+    public var fileSize: Int?
+
     public init() {}
-    
+
     public init(
         title: String? = nil,
         artist: String? = nil,
         album: String? = nil,
         albumArtist: String? = nil,
+        composer: String? = nil,
         genre: String? = nil,
         year: Int? = nil,
         trackNumber: Int? = nil,
+        trackTotal: Int? = nil,
         discNumber: Int? = nil,
-        artworkData: Data? = nil
+        discTotal: Int? = nil,
+        bpm: Int? = nil,
+        replayGainTrack: Double? = nil,
+        replayGainAlbum: Double? = nil,
+        comment: String? = nil,
+        artworkData: Data? = nil,
+        duration: TimeInterval? = nil,
+        bitrate: Int? = nil,
+        sampleRate: Double? = nil,
+        channels: Int? = nil,
+        fileSize: Int? = nil
     ) {
         self.title = title
         self.artist = artist
         self.album = album
         self.albumArtist = albumArtist
+        self.composer = composer
         self.genre = genre
         self.year = year
         self.trackNumber = trackNumber
+        self.trackTotal = trackTotal
         self.discNumber = discNumber
+        self.discTotal = discTotal
+        self.bpm = bpm
+        self.replayGainTrack = replayGainTrack
+        self.replayGainAlbum = replayGainAlbum
+        self.comment = comment
         self.artworkData = artworkData
+        self.duration = duration
+        self.bitrate = bitrate
+        self.sampleRate = sampleRate
+        self.channels = channels
+        self.fileSize = fileSize
     }
 }
 
 // Helper methods
 extension TagBundle {
+    /// Returns true if all tag fields are nil.
+    ///
+    /// Technical info fields (duration, bitrate, sampleRate, channels, fileSize)
+    /// are excluded because they describe the audio stream, not user-facing tags.
+    /// A file with no ID3 / MP4 tags but a valid duration is still considered
+    /// "empty" from a tagging perspective.
     public var isEmpty: Bool {
-        title == nil && artist == nil && album == nil && 
-        albumArtist == nil && genre == nil && year == nil && 
-        trackNumber == nil && discNumber == nil && artworkData == nil
+        return title == nil &&
+               artist == nil &&
+               album == nil &&
+               albumArtist == nil &&
+               composer == nil &&
+               genre == nil &&
+               year == nil &&
+               trackNumber == nil &&
+               trackTotal == nil &&
+               discNumber == nil &&
+               discTotal == nil &&
+               bpm == nil &&
+               replayGainTrack == nil &&
+               replayGainAlbum == nil &&
+               comment == nil &&
+               artworkData == nil
     }
 }
 ```
@@ -190,29 +264,53 @@ struct StreamInfo {
 ## C++20: TagBundle
 
 ```cpp
-#include 
-#include 
-#include 
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
 
 struct TagBundle {
-    std::optional title;
-    std::optional artist;
-    std::optional album;
-    std::optional album_artist;
-    std::optional genre;
-    std::optional year;
-    std::optional track_number;
-    std::optional disc_number;
-    std::optional<std::vector> artwork_data;
-    
+    // Schema version for cross-session compatibility checks
+    static constexpr int current_schema_version = 1;
+
+    // Tag fields
+    std::optional<std::string> title;
+    std::optional<std::string> artist;
+    std::optional<std::string> album;
+    std::optional<std::string> album_artist;
+    std::optional<std::string> composer;
+    std::optional<std::string> genre;
+    std::optional<int>         year;
+    std::optional<int>         track_number;
+    std::optional<int>         track_total;
+    std::optional<int>         disc_number;
+    std::optional<int>         disc_total;
+    std::optional<int>         bpm;
+    std::optional<double>      replay_gain_track;
+    std::optional<double>      replay_gain_album;
+    std::optional<std::string> comment;
+    std::optional<std::vector<uint8_t>> artwork_data;
+
+    // Technical info fields (excluded from is_empty)
+    std::optional<double>      duration;      // seconds
+    std::optional<int>         bitrate;       // kbps
+    std::optional<double>      sample_rate;   // Hz
+    std::optional<int>         channels;
+    std::optional<int64_t>     file_size;     // bytes
+
     // Default comparison (C++20)
     bool operator==(const TagBundle&) const = default;
-    
-    // Helper method
-    bool isEmpty() const {
-        return !title && !artist && !album && !album_artist && 
-               !genre && !year && !track_number && !disc_number && 
-               !artwork_data;
+
+    // Returns true if all tag fields are nullopt.
+    // Technical info fields are excluded — they describe the audio stream,
+    // not user-facing tags.
+    bool is_empty() const {
+        return !title && !artist && !album && !album_artist &&
+               !composer && !genre && !year &&
+               !track_number && !track_total &&
+               !disc_number && !disc_total &&
+               !bpm && !replay_gain_track && !replay_gain_album &&
+               !comment && !artwork_data;
     }
 };
 ```
