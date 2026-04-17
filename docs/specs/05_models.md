@@ -109,9 +109,16 @@ struct StreamInfo {
 
 ## TagBundle
 
-Contains metadata tags extracted from or to be written to an audio file.
+Contains metadata tags extracted from or to be written to an audio file, along with technical information about the audio stream.
 
 ### Fields
+
+`TagBundle` contains two categories of fields:
+
+- **Tag fields** — user-facing metadata (ID3, MP4, Vorbis tags) that can appear in `isEmpty`
+- **Technical info fields** — audio stream and file properties read alongside tags; excluded from `isEmpty` because they describe the container, not the tag content
+
+#### Tag fields
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
@@ -131,6 +138,28 @@ Contains metadata tags extracted from or to be written to an audio file.
 | `replayGainAlbum` | `Double?` | ReplayGain album gain in dB | -1.50 |
 | `comment` | `String?` | Free-form comment | "Live at Carnegie Hall" |
 | `artworkData` | `Data?` / `ByteArray?` | Embedded cover art (raw image bytes) | JPEG/PNG data |
+
+#### Technical info fields
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `duration` | `TimeInterval?` / `Double?` | Duration in seconds | 354.12 |
+| `bitrate` | `Int?` | Estimated bitrate in kbps | 320 |
+| `sampleRate` | `Double?` | Sample rate in Hz | 44100.0 |
+| `channels` | `Int?` | Number of audio channels (1 = mono, 2 = stereo) | 2 |
+| `fileSize` | `Int?` | File size in bytes | 14_182_400 |
+
+### Schema Version
+
+```swift
+public static let currentSchemaVersion: Int = 1
+```
+
+Consumers (e.g. HarmoniaPlayer) use `currentSchemaVersion` to detect tracks persisted by an older schema and trigger background metadata re-reads.
+
+**History:**
+- `0` — legacy (no technical info fields)
+- `1` — added `duration`, `bitrate`, `sampleRate`, `channels`, `fileSize`
 
 > **ReplayGain fields — current status: read-only**
 > `replayGainTrack` and `replayGainAlbum` are populated by `TagReaderPort`
@@ -171,15 +200,32 @@ Contains metadata tags extracted from or to be written to an audio file.
 **Swift:**
 ```swift
 public struct TagBundle: Sendable, Equatable {
+    public static let currentSchemaVersion: Int = 1
+
+    // Tag fields
     public var title: String?
     public var artist: String?
     public var album: String?
     public var albumArtist: String?
+    public var composer: String?
     public var genre: String?
     public var year: Int?
     public var trackNumber: Int?
+    public var trackTotal: Int?
     public var discNumber: Int?
+    public var discTotal: Int?
+    public var bpm: Int?
+    public var replayGainTrack: Double?
+    public var replayGainAlbum: Double?
+    public var comment: String?
     public var artworkData: Data?
+
+    // Technical info fields (excluded from isEmpty)
+    public var duration: TimeInterval?
+    public var bitrate: Int?
+    public var sampleRate: Double?
+    public var channels: Int?
+    public var fileSize: Int?
 
     public init() {}
 }
@@ -188,6 +234,9 @@ public struct TagBundle: Sendable, Equatable {
 **C++:**
 ```cpp
 struct TagBundle {
+    static constexpr int current_schema_version = 1;
+
+    // Tag fields
     std::optional<std::string> title;
     std::optional<std::string> artist;
     std::optional<std::string> album;
@@ -204,6 +253,13 @@ struct TagBundle {
     std::optional<double>      replay_gain_album;
     std::optional<std::string> comment;
     std::optional<std::vector<uint8_t>> artwork_data;
+
+    // Technical info fields (excluded from is_empty)
+    std::optional<double>      duration;     // seconds
+    std::optional<int>         bitrate;      // kbps
+    std::optional<double>      sample_rate;  // Hz
+    std::optional<int>         channels;
+    std::optional<int64_t>     file_size;    // bytes
 
     bool operator==(const TagBundle&) const = default;
 };
