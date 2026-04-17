@@ -40,7 +40,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 
 **Notes:**
 1. `FlacDecoderAdapter` and `DsdDecoderAdapter` are planned for **macOS Pro builds** (require external libraries: `libFLAC`, `dsd2pcm`)
-2. `AVMutableTagWriterAdapter` currently not functional (iOS sandbox restrictions; macOS support deferred)
+2. `AVMutableTagWriterAdapter` writes ID3 / MP4 metadata on macOS via `AVAssetExportSession` passthrough. iOS throws `CoreError.unsupported` due to sandbox restrictions. FLAC / DSF / DFF are gated at write time — a future `TagLibTagWriterAdapter` will cover those containers.
 
 ---
 
@@ -59,7 +59,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 - **DsdDecoderAdapter : DecoderPort** — Converts DSD to PCM using `dsd2pcm` (planned for macOS Pro).  
 - **AVAudioEngineOutputAdapter : AudioOutputPort** — Uses `AVAudioEngine` / `AVAudioPlayerNode` for playback.  
 - **AVMetadataTagReaderAdapter : TagReaderPort** — Maps AV metadata into `TagBundle`.  
-- **AVMutableTagWriterAdapter : TagWriterPort** — Currently not functional (see notes).
+- **AVMutableTagWriterAdapter : TagWriterPort** — Writes ID3 / MP4 metadata on macOS via `AVAssetExportSession` passthrough; iOS throws `CoreError.unsupported`. See `02_01_apple.adapters.md` §2.10 for details.
 
 ### Decoder Selection Logic (Apple)
 
