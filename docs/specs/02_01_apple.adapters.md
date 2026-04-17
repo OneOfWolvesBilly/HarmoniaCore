@@ -12,7 +12,7 @@ Apple adapters implement the common Ports using system frameworks:
 | **DecoderPort (Pro)** | `DsdDecoderAdapter` | Embedded C (`dsd2pcm`) | macOS Pro | Converts DSF / DFF → PCM. |
 | **FileAccessPort** | `SandboxFileAccessAdapter` | Foundation / Security | iOS / macOS | Manages sandbox-scoped URLs. |
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | AVFoundation | iOS / macOS | Reads ID3 / MP4 metadata. |
-| **TagWriterPort** | `AVMutableTagWriterAdapter` | AVFoundation | iOS / macOS | Always throws `CoreError.unsupported` (see note below). |
+| **TagWriterPort** | `AVMutableTagWriterAdapter` | AVFoundation | iOS / macOS | macOS: writes ID3 / MP4 metadata via `AVAssetExportSession` passthrough. iOS: throws `CoreError.unsupported` (sandbox). |
 | **ClockPort** | `MonotonicClockAdapter` | Dispatch / mach | iOS / macOS | Uses `DispatchTime.now().uptimeNanoseconds`. |
 | **LoggerPort** | `OSLogAdapter` | os.log | iOS / macOS | Uses unified logging; fallback to no-op. |
 | **LoggerPort** | `NoopLogger` | N/A | iOS / macOS | Discards all messages (used in tests). |
@@ -198,16 +198,57 @@ a `DispatchSemaphore` to bridge the boundary. See implementation guide
 
 ### 2.10 AVMutableTagWriterAdapter : TagWriterPort
 
-- Uses `AVMutableMetadataItem` for writable metadata where supported.
-- **Currently throws `CoreError.unsupported` on all platforms.**
-- **iOS:** All write attempts throw due to sandbox restrictions.
-- **macOS:** Support deferred; currently throws for consistency.
-- **ReplayGain:** Not writable on Apple platforms due to AVFoundation limitations.
-  Future TagLib-based adapter planned for cross-platform write support.
+Writes metadata to audio files using `AVAssetExportSession` in passthrough mode, preserving original audio stream data. Implemented on macOS; iOS throws due to sandbox restrictions.
 
-**Limitation:**
-- Implementations MUST silently skip `replayGainTrack` and `replayGainAlbum`
-  fields rather than throw an error.
+**Platform behavior:**
+
+- **iOS:** All `write(url:tags:)` calls throw `CoreError.unsupported`. Sandbox restrictions prevent arbitrary file writes.
+- **macOS:** Full write support for AVFoundation-native container formats (MP3, AAC, ALAC, WAV, AIFF).
+
+**Format gating (macOS):**
+
+- FLAC, DSF, and DFF files throw `CoreError.unsupported` **before any file I/O**. AVFoundation's export session cannot produce these container formats; a future `TagLibTagWriterAdapter` will cover them.
+- Other containers are validated by checking `AVURLAsset.isExportable`; non-exportable assets throw `CoreError.unsupported`.
+
+**Writable fields:**
+
+The adapter reads fourteen `TagBundle` fields and produces up to twelve AVFoundation metadata items. `trackNumber` pairs with `trackTotal` into a single `TRCK` item, and `discNumber` pairs with `discTotal` into a single `TPOS` item, which is why fourteen fields map to twelve identifiers.
+
+| `TagBundle` field(s) | `AVMetadataIdentifier` | Notes |
+|---|---|---|
+| `title` | `commonIdentifierTitle` | |
+| `artist` | `commonIdentifierArtist` | |
+| `album` | `commonIdentifierAlbumName` | |
+| `albumArtist` | `id3MetadataBand` (TPE2) | |
+| `composer` | `id3MetadataComposer` (TCOM) | |
+| `genre` | `id3MetadataContentType` (TCON) | |
+| `year` | `id3MetadataRecordingTime` (TDRC) | |
+| `trackNumber` + `trackTotal` | `id3MetadataTrackNumber` (TRCK) | `"N/T"` format when `trackTotal` is present, otherwise `"N"`. |
+| `discNumber` + `discTotal` | `id3MetadataPartOfASet` (TPOS) | Same `N/T` format rule. |
+| `bpm` | `id3MetadataBeatsPerMinute` (TBPM) | |
+| `comment` | `id3MetadataComments` (COMM) | |
+| `artworkData` | `commonIdentifierArtwork` | Raw image bytes (JPEG / PNG). |
+
+**Silently skipped fields:**
+
+- `replayGainTrack` and `replayGainAlbum` are **silently skipped** (no error). AVFoundation cannot write the `TXXX` ID3 frame that these fields require. A future `TagLibTagWriterAdapter` will support them on macOS.
+
+**Atomic file replacement:**
+
+After the export session writes to a temporary URL, the adapter replaces the original file using `FileManager.replaceItem(at:withItemAt:backupItemName:options:resultingItemURL:)`. This preserves the original file's:
+
+- Extended attributes (including `com.apple.metadata:kMDItemWhereFroms`)
+- Creation date
+- POSIX permissions
+- Access control lists
+- File ownership
+
+The previous `removeItem` + `moveItem` pattern silently dropped these and is no longer used.
+
+**Error mapping:**
+
+- Format or capability refusal → `CoreError.unsupported(String)`
+- Export session failure, file replacement failure, underlying I/O error → `CoreError.ioError(underlying: Error)`
 
 ---
 
