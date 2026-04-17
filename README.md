@@ -16,7 +16,7 @@ multiple platforms without sharing source code, using **hexagonal (ports & adapt
 architecture**:
 
 1. **Specification repository** — Source of truth for ports, services, models, and parity rules
-2. **Swift reference implementation** — Complete AVFoundation-backed adapter set for Apple platforms
+2. **Swift reference implementation** — AVFoundation-backed adapter set for Apple platforms
 3. **C++20 Linux implementation** — Planned parity target
 
 HarmoniaCore is consumed as a Swift Package by [HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer), which serves as the reference application and parity harness.
@@ -54,10 +54,12 @@ See [Architecture Overview](docs/specs/01_architecture.md) for the full system d
 
 | Component | Swift (Apple) | C++20 (Linux) |
 |-----------|---------------|---------------|
-| Ports | ✅ Complete | 🚧 Planned v0.2 |
-| Adapters | ✅ Complete | 🚧 Planned v0.2 |
-| Services | ✅ Complete | 🚧 Planned v0.2 |
-| Tests | ✅ Comprehensive | 🚧 Planned v0.2 |
+| Ports | ✅ Implemented | 🚧 Planned |
+| Adapters | ✅ Implemented | 🚧 Planned |
+| Services | ✅ Implemented | 🚧 Planned |
+| Tests | ✅ Available | 🚧 Planned |
+
+Component-level status only. Version-level progress is tracked in [Roadmap](#roadmap).
 
 For the current inventory of ports, adapters, services, and models, see the corresponding specification documents under [Documentation](#documentation) below.
 
@@ -70,9 +72,11 @@ dependencies: [
 ]
 ```
 
+> `HarmoniaCore-Swift` is a standalone Swift Package extracted from `apple-swift/` via `git subtree split`. See [Related Projects](#related-projects) for the relationship between the two repositories.
+
 **Requirements:**
-- Xcode 26 beta
-- Swift 5.9+ (Swift 6 strict concurrency supported)
+- Xcode 15.3+ (Xcode 26 beta supports Swift 6 strict concurrency)
+- Swift 5.9+ (Swift 5.10+ recommended for `nonisolated(unsafe)`)
 - macOS 13+ or iOS 16+
 
 See [Services Implementation](docs/impl/04_services_impl.md) for service construction examples and [Testing Guide](docs/testing.md) for writing tests against mock ports.
@@ -91,6 +95,28 @@ swift test --enable-code-coverage
 ```
 
 For comprehensive testing guidance — mock usage patterns, CI configuration, and troubleshooting — see [Testing Guide](docs/testing.md).
+
+## Repository Structure
+
+```
+HarmoniaCore/
+├── apple-swift/              # Swift reference implementation
+│   ├── Sources/HarmoniaCore/
+│   │   ├── Ports/            # Port protocols (LoggerPort, ClockPort, ...)
+│   │   ├── Adapters/         # Apple platform adapters (AVFoundation, OSLog, ...)
+│   │   ├── Services/         # PlaybackService protocol and default implementation
+│   │   └── Models/           # StreamInfo, TagBundle, CoreError
+│   └── Tests/                # XCTest suite with mock ports
+├── docs/
+│   ├── specs/                # Platform-agnostic specifications
+│   ├── impl/                 # Platform-specific implementation notes
+│   ├── specs_to_impl_map.md  # Navigation guide
+│   └── testing.md            # Comprehensive testing overview
+├── README.md
+└── LICENSE.md
+```
+
+For the full file listing of any sub-directory, see the corresponding specification document under [Documentation](#documentation) below.
 
 ## Documentation
 
@@ -120,22 +146,10 @@ For comprehensive testing guidance — mock usage patterns, CI configuration, an
 
 ## Roadmap
 
-### v0.1 — Swift Reference Implementation ✅ (Current)
-- Core hexagonal architecture
-- Complete port and adapter set
-- PlaybackService API
-- Comprehensive unit tests
-
-### v0.2 — Linux C++20 Implementation (Q1–Q2 2026)
-- C++20 domain model mirroring Swift reference
-- PipeWire / FFmpeg adapters
-- Cross-platform behavior parity validation
-
-### v0.3+ — Advanced Features (Future)
-- Gapless playback
-- Real-time equalizer
-- Playlist service
-- Hi-Res audio support (96 kHz / 192 kHz / 384 kHz)
+- **v0.1** — Swift reference supporting HarmoniaPlayer Free (In development)
+- **v0.2** — Swift extensions for HarmoniaPlayer Pro (In development)
+- **v0.3+** — Advanced audio features (Planned)
+- **Linux C++20 parity** — Cross-platform implementation (Deferred)
 
 ## Contributing
 
