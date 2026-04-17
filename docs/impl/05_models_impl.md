@@ -320,8 +320,8 @@ struct TagBundle {
 ## C++20: CoreError
 
 ```cpp
-#include 
-#include 
+#include <exception>
+#include <string>
 
 enum class CoreErrorType {
     InvalidArgument,
@@ -401,7 +401,7 @@ enum class PlaybackState {
 // For services that need to track error state
 struct PlaybackStatus {
     PlaybackState state;
-    std::optional error;
+    std::optional<CoreError> error;
     
     bool isError() const {
         return state == PlaybackState::Error && error.has_value();
