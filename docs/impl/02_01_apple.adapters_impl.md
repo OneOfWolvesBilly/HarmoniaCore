@@ -549,28 +549,45 @@ The adapter is safe to call from background threads.
 
 ## AVMutableTagWriterAdapter : TagWriterPort
 
-Currently not functional on any Apple platform.
+Writes metadata to audio files on macOS via `AVAssetExportSession` passthrough export. iOS throws due to sandbox restrictions.
+
+**Conformance:**
 
 ```swift
 public final class AVMutableTagWriterAdapter: TagWriterPort {
     public init() {}
-
-    public func write(url: URL, tags: TagBundle) throws {
-        // replayGainTrack and replayGainAlbum are silently skipped.
-        // AVFoundation does not support writing TXXX frames.
-        // Writing support deferred to future TagLib-based adapter.
-        throw CoreError.unsupported(
-            "Tag writing is not supported. " +
-            "iOS: sandbox restrictions. macOS: deferred."
-        )
-    }
+    public func write(url: URL, tags: TagBundle) throws
 }
 ```
 
+**iOS behavior:**
+
+Throws `CoreError.unsupported` immediately. Sandbox prevents arbitrary file writes; a future `TagLibTagWriterAdapter` may cover this platform when needed.
+
+**macOS pipeline:**
+
+The write pipeline performs the following steps in order; any step may throw and halts the pipeline.
+
+1. **Format gate.** `.flac`, `.dsf`, and `.dff` extensions throw `CoreError.unsupported` before opening the asset — AVFoundation's export session cannot produce these containers.
+2. **Exportability check.** Load `AVURLAsset.isExportable`. Non-exportable assets throw `CoreError.unsupported`.
+3. **Metadata build.** Map the `TagBundle` fields into `[AVMutableMetadataItem]` using the identifiers listed in the behavioral spec. `replayGainTrack` and `replayGainAlbum` are silently skipped — AVFoundation cannot write the `TXXX` frame they require.
+4. **Passthrough export.** Create `AVAssetExportSession` with `AVAssetExportPresetPassthrough`, set `metadata` and `outputURL` (temp file in the system temp directory, same extension as original), and run `exportAsynchronously`. Export failures map to `CoreError.ioError(underlying:)`.
+5. **Atomic replacement.** Replace the original file with the temp file using `FileManager.replaceItem(at:withItemAt:backupItemName:options:resultingItemURL:)`. This preserves extended attributes, creation date, POSIX permissions, ACL, and ownership. Failure maps to `CoreError.ioError(underlying:)`; the temp file is cleaned up.
+
+**Field mapping:**
+
+See `specs/02_01_apple.adapters.md` §2.10 for the complete `TagBundle` → `AVMetadataIdentifier` table. The adapter reads fourteen fields and produces up to twelve identifiers (`trackNumber` + `trackTotal` share `TRCK`; `discNumber` + `discTotal` share `TPOS`). The `N/T` string format is used when a total is present, otherwise `N` alone.
+
 **Rationale:**
-- iOS: Sandbox restrictions prevent file writes
-- macOS: Support deferred to future version
-- ReplayGain: AVFoundation cannot write TXXX frames; future TagLib adapter planned
+
+- **Passthrough export** preserves the original audio stream verbatim; no re-encoding of PCM data.
+- **Atomic replacement** (not `removeItem` + `moveItem`) preserves xattr such as `com.apple.metadata:kMDItemWhereFroms` and the original creation date. Pre-Slice-9-B versions lost these; see Slice 9-B commit history.
+- **ReplayGain skip, not error:** callers can round-trip `TagBundle` through read → write without special-casing these two fields.
+- **FLAC / DSF / DFF refusal:** AVFoundation cannot write these container formats; a future `TagLibTagWriterAdapter` will cover them.
+
+**Concurrency:**
+
+All AVFoundation async calls (`asset.load(.isExportable)`, `exportAsynchronously`) are bridged to the caller via `DispatchSemaphore`. The adapter is safe to call from background threads but blocks the calling thread for the duration of the export. `AVFoundation` is imported `@preconcurrency` to satisfy Swift 6 strict concurrency.
 
 ---
 
