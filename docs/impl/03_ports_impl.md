@@ -217,6 +217,10 @@ public protocol AudioOutputPort: AnyObject {
     /// Flushes all queued audio buffers without stopping the engine.
     /// Use before seeking to clear stale audio from the old position.
     func flush()
+
+    /// Sets the output volume.
+    /// Parameter range: 0.0 (silent) to 1.0 (full); out-of-range values are clamped.
+    func setVolume(_ volume: Float)
 }
 ```
 
@@ -225,6 +229,7 @@ public protocol AudioOutputPort: AnyObject {
 - `stop()` must NOT throw (spec requirement)
 - `render()` may be called from real-time audio thread
 - `flush()` must NOT throw; clears queued buffers, restarts player node
+- `setVolume()` clamps out-of-range values; safe to call concurrently with `render()`
 
 **Usage:**
 ```swift
@@ -495,6 +500,15 @@ public:
     virtual void stop() = 0;
     
     virtual int render(const float* buffer, int frame_count) = 0;
+
+    /// Flush all queued audio buffers without stopping the engine.
+    /// Use before seeking to clear stale audio from the old position. Must NOT throw.
+    virtual void flush() = 0;
+
+    /// Set the output volume.
+    /// Parameter range: 0.0 (silent) to 1.0 (full); out-of-range values are clamped.
+    /// Must NOT throw; safe to call concurrently with render().
+    virtual void set_volume(float volume) = 0;
 };
 ```
 

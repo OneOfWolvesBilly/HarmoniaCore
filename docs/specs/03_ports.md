@@ -243,6 +243,7 @@ protocol AudioOutputPort {
     stop()
     flush()
     render(interleavedFloat32: UnsafePointer<Float>, frameCount: Int) throws -> Int
+    setVolume(volume: Float)
 }
 ```
 
@@ -270,6 +271,12 @@ protocol AudioOutputPort {
 - Returns number of frames actually consumed.
 - Throws `CoreError.invalidState` if output is not started.
 - **Real-Time Safety:** MUST NOT allocate memory, block, or acquire locks.
+
+**setVolume(volume)**
+- Sets the output volume for subsequent `render()` output.
+- Parameter range: `0.0` (silent) to `1.0` (full). Values outside this range MUST be clamped by the implementation.
+- MUST be idempotent. MUST NOT throw.
+- Thread Safety: safe to call from any thread (implementations MUST be prepared for concurrent calls with `render()`).
 
 ---
 
