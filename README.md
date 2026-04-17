@@ -4,22 +4,24 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%2013+%20%7C%20iOS%2016+-lightgrey.svg)](https://developer.apple.com)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 
+Platform-independent audio playback core with Ports & Adapters architecture.
+
+## What is HarmoniaCore?
+
 **HarmoniaCore** is an open-source, architecture-first audio playback core designed for
 **behavior parity across platforms**.
 
 It provides a deterministic, testable audio domain model implemented independently on
 multiple platforms without sharing source code, using **hexagonal (ports & adapters)
-architecture**.
+architecture**:
 
-* **Swift (Apple platforms)**: complete and serves as the **reference implementation**
-* **C++20 (Linux)**: planned parity implementation
+1. **Specification repository** — Source of truth for ports, services, models, and parity rules
+2. **Swift reference implementation** — Complete AVFoundation-backed adapter set for Apple platforms
+3. **C++20 Linux implementation** — Planned parity target
 
----
+HarmoniaCore is consumed as a Swift Package by [HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer), which serves as the reference application and parity harness.
 
-## Architecture
-
-HarmoniaCore follows **Ports & Adapters (Hexagonal Architecture)** to guarantee platform
-independence and long-term maintainability.
+### Architecture
 
 ```
 +-------------------------+
@@ -31,7 +33,7 @@ independence and long-term maintainability.
 +-----------+-------------+
             |
 +-----------v-------------+
-|        Ports Layer      |  <-- DecoderPort, AudioOutputPort, ClockPort
+|        Ports Layer      |  <-- DecoderPort, AudioOutputPort, ClockPort, ...
 +-----------+-------------+
             |
 +-----------v-------------+
@@ -39,18 +41,27 @@ independence and long-term maintainability.
 +-------------------------+
 ```
 
-**Design rationale**:
+**Design principles:**
 
-* Core behavior is platform-agnostic and reusable
-* All logic is fully testable via mock ports
-* New platforms can be added without modifying domain logic
-* Independent implementations can be validated for behavior parity
+- Core behavior is platform-agnostic and reusable
+- All logic is fully testable through mock ports
+- New platforms can be added without modifying domain logic
+- Independent implementations can be validated for behavior parity
 
----
+See [Architecture Overview](docs/specs/01_architecture.md) for the full system design.
 
-## Quick Start (Swift)
+## Implementation Status
 
-### Installation
+| Component | Swift (Apple) | C++20 (Linux) |
+|-----------|---------------|---------------|
+| Ports | ✅ Complete | 🚧 Planned v0.2 |
+| Adapters | ✅ Complete | 🚧 Planned v0.2 |
+| Services | ✅ Complete | 🚧 Planned v0.2 |
+| Tests | ✅ Comprehensive | 🚧 Planned v0.2 |
+
+For the current inventory of ports, adapters, services, and models, see the corresponding specification documents under [Documentation](#documentation) below.
+
+## Installation (Swift)
 
 ```swift
 // Package.swift
@@ -59,208 +70,96 @@ dependencies: [
 ]
 ```
 
-### Basic Usage
+**Requirements:**
+- Xcode 26 beta
+- Swift 5.9+ (Swift 6 strict concurrency supported)
+- macOS 13+ or iOS 16+
 
-```swift
-import HarmoniaCore
+See [Services Implementation](docs/impl/04_services_impl.md) for service construction examples and [Testing Guide](docs/testing.md) for writing tests against mock ports.
 
-// Create service
-let service = DefaultPlaybackService(
-    decoder: AVAssetReaderDecoderAdapter(logger: OSLogAdapter()),
-    audio: AVAudioEngineOutputAdapter(logger: OSLogAdapter()),
-    clock: MonotonicClockAdapter(),
-    logger: OSLogAdapter()
-)
-
-// Playback control
-try service.load(url: audioFileURL)
-try service.play()
-service.pause()
-try service.seek(to: 30.0)
-service.stop()
-
-// Query state
-print("Duration: \(service.duration())s")
-print("Position: \(service.currentTime())s")
-print("State: \(service.state)")
-```
-
----
-
-## Implementation Status
-
-| Component | Swift (Apple) | C++20 (Linux) |
-|-----------|---------------|---------------|
-| Ports (7) | ✅ Complete | 🚧 Planned v0.2 |
-| Adapters | ✅ 8 adapters | 🚧 Planned v0.2 |
-| Services | ✅ PlaybackService | 🚧 Planned v0.2 |
-| Tests | ✅ Comprehensive | 🚧 Planned v0.2 |
-
-### Implemented Components (Swift)
-
-**Ports**: LoggerPort, ClockPort, FileAccessPort, DecoderPort, AudioOutputPort, TagReaderPort, TagWriterPort
-
-**Apple Adapters**: OSLogAdapter, MonotonicClockAdapter, SandboxFileAccessAdapter, AVAssetReaderDecoderAdapter, AVAudioEngineOutputAdapter, AVMetadataTagReaderAdapter, AVMutableTagWriterAdapter, NoopLogger
-
-**Services**: PlaybackService protocol, DefaultPlaybackService implementation
-
-**Tests**: MockDecoderPort, MockAudioOutputPort, MockClockPort, DefaultPlaybackServiceTests
-
----
-
-## Development
-
-### Requirements
-- Xcode 26 beta (Swift 6)
-- macOS 15.6+ or iOS 26+
-
-### Building
+## Building and Testing
 
 ```bash
 # Build
 swift build
 
-# Release build
-swift build -c release
-```
-
-### Testing with Mocks
-
-HarmoniaCore provides comprehensive mock implementations for all ports:
-
-```swift
-import XCTest
-@testable import HarmoniaCore
-
-let mockDecoder = MockDecoderPort(duration: 10.0, sampleRate: 44100.0)
-let mockAudio = MockAudioOutputPort()
-let mockClock = MockClockPort()
-
-let service = DefaultPlaybackService(
-    decoder: mockDecoder,
-    audio: mockAudio,
-    clock: mockClock,
-    logger: NoopLogger()
-)
-
-try service.load(url: testURL)
-XCTAssertTrue(mockDecoder.openCalled)
-XCTAssertEqual(service.state, .paused)
-```
-
----
-
-## Validation & Testing
-
-HarmoniaCore provides comprehensive testing infrastructure to ensure reliability and enable cross-platform behavior validation.
-
-### Available Mocks
-
-* **`MockDecoderPort`** - Simulates audio decoding with configurable behavior
-* **`MockAudioOutputPort`** - Captures rendered audio for verification
-* **`MockClockPort`** - Allows manual time control for deterministic tests
-* **`MockFileAccessPort`** - Simulates file I/O operations
-* **`MockTagReaderPort` / `MockTagWriterPort`** - Simulates metadata operations
-
-### Running Tests (Swift)
-```bash
 # Run all tests
 swift test
 
 # Run with code coverage
 swift test --enable-code-coverage
-
-# Run specific test suite
-swift test --filter DefaultPlaybackServiceTests
 ```
 
-**See [Testing Guide](docs/testing.md) for comprehensive documentation:**
-- Test structure and organization
-- Writing tests with mocks
-- Test patterns and best practices
-- CI/CD configuration
-- Troubleshooting
-
-**Implementation Guides:**
-- [Swift Testing Implementation](docs/impl/06_01_testing_swift.md) - XCTest patterns and examples
-- [C++20 Testing Implementation](docs/impl/06_02_testing_cpp.md) - Google Test patterns (planned)
-
----
-
-## Roadmap
-
-### v0.1 - Swift Reference Implementation ✅ (Current)
-
-* Core hexagonal architecture
-* Complete port and adapter set
-* PlaybackService API
-* Comprehensive unit tests
-
-### v0.2 - Linux C++20 Implementation (Q1-Q2 2026)
-
-Focus areas:
-
-* C++20 domain model mirroring Swift reference
-* PipeWire / FFmpeg adapters
-* Cross-platform behavior parity validation
-
-### v0.3+ - Advanced Features (Future)
-
-* Gapless playback
-* Real-time equalizer
-* Playlist service
-* Hi-Res audio support (96kHz/192kHz/384kHz)
-
----
+For comprehensive testing guidance — mock usage patterns, CI configuration, and troubleshooting — see [Testing Guide](docs/testing.md).
 
 ## Documentation
 
 ### Specifications (Platform-Agnostic)
-- [Architecture Overview](docs/specs/01_architecture.md)
-- [Adapters Specification](docs/specs/02_adapters.md)
-- [Ports Specification](docs/specs/03_ports.md)
-- [Services Specification](docs/specs/04_services.md)
-- [Models Specification](docs/specs/05_models.md)
+- **[Architecture Overview](docs/specs/01_architecture.md)** — System design, layer responsibilities, data flow
+- **[Adapters Specification](docs/specs/02_adapters.md)** — Cross-platform adapter contract
+- **[Apple Adapters](docs/specs/02_01_apple.adapters.md)** — AVFoundation adapter behavioral specs
+- **[Linux Adapters](docs/specs/02_02_linux.adapters.md)** — C++20 / PipeWire adapter specs (planned)
+- **[Ports Specification](docs/specs/03_ports.md)** — Port protocols and semantics
+- **[Services Specification](docs/specs/04_services.md)** — PlaybackService and high-level service contracts
+- **[Models Specification](docs/specs/05_models.md)** — StreamInfo, TagBundle, CoreError, and validation rules
+- **[Test Strategy](docs/specs/06_test_strategy.md)** — Testing philosophy, categories, coverage goals
+- **[API Parity](docs/specs/07_api-parity.md)** — Cross-platform behavior validation rules
 
 ### Implementation Guides
-- [Apple Adapters Implementation](docs/impl/02_01_apple.adapters_impl.md)
-- [Ports Implementation](docs/impl/03_ports_impl.md)
-- [Services Implementation](docs/impl/04_services_impl.md)
-- [Models Implementation](docs/impl/05_models_impl.md)
+- **[Apple Adapters Implementation](docs/impl/02_01_apple.adapters_impl.md)** — Swift adapter code patterns
+- **[Linux Adapters Implementation](docs/impl/02_02_linux.adapters_impl.md)** — C++20 adapter patterns (planned)
+- **[Ports Implementation](docs/impl/03_ports_impl.md)** — Concrete Swift / C++ port shapes
+- **[Services Implementation](docs/impl/04_services_impl.md)** — Service wiring and usage examples
+- **[Models Implementation](docs/impl/05_models_impl.md)** — Model definitions and validation logic
+- **[Swift Testing Implementation](docs/impl/06_01_testing_swift.md)** — XCTest patterns and mock usage
+- **[C++20 Testing Implementation](docs/impl/06_02_testing_cpp.md)** — Google Test patterns (planned)
 
-### Testing Documentation
-- [Testing Guide](docs/testing.md) - Comprehensive testing guide
-- [Swift Testing Implementation](docs/impl/06_01_testing_swift.md) - XCTest patterns
-- [C++20 Testing Implementation](docs/impl/06_02_testing_cpp.md) - Google Test patterns (planned)
+### Navigation
+- **[Spec → Impl Mapping](docs/specs_to_impl_map.md)** — How specifications map to implementation notes
+- **[Testing Guide](docs/testing.md)** — Comprehensive testing overview
 
----
+## Roadmap
+
+### v0.1 — Swift Reference Implementation ✅ (Current)
+- Core hexagonal architecture
+- Complete port and adapter set
+- PlaybackService API
+- Comprehensive unit tests
+
+### v0.2 — Linux C++20 Implementation (Q1–Q2 2026)
+- C++20 domain model mirroring Swift reference
+- PipeWire / FFmpeg adapters
+- Cross-platform behavior parity validation
+
+### v0.3+ — Advanced Features (Future)
+- Gapless playback
+- Real-time equalizer
+- Playlist service
+- Hi-Res audio support (96 kHz / 192 kHz / 384 kHz)
 
 ## Contributing
 
-Contributions welcome! Please:
+Contributions welcome. Please:
 
 1. Follow the hexagonal architecture (Ports for abstractions, Adapters for implementations)
-2. Write tests for all new code
-3. Update relevant documentation
+2. Write tests for all new code against mock ports
+3. Update the relevant specification and implementation documents
 4. Use conventional commit messages
 
-See the specification documents for detailed design guidelines.
+See the [specification documents](#specifications-platform-agnostic) for detailed design guidelines.
 
----
+## Related Projects
+
+- **[HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer)** — Reference SwiftUI music player built on HarmoniaCore
+- **[HarmoniaCore-Swift](https://github.com/OneOfWolvesBilly/HarmoniaCore-Swift)** — Standalone Swift Package (subtree split from `apple-swift/`). Tagged releases define the version HarmoniaPlayer pins for deployment.
 
 ## License
 
-MIT License - see [LICENSE.md](LICENSE.md) for details.
+MIT License — see [LICENSE.md](LICENSE.md) for details.
 
 Copyright (c) 2025 Chih-hao (Billy) Chen
 
----
-
 ## Contact
 
-- GitHub: [@OneOfWolvesBilly](https://github.com/OneOfWolvesBilly)
-- Project: [HarmoniaCore](https://github.com/OneOfWolvesBilly/HarmoniaCore)
-
----
-
-**Building a music player?** Check out [HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer) - a reference SwiftUI app using HarmoniaCore.
+- **GitHub**: [@OneOfWolvesBilly](https://github.com/OneOfWolvesBilly)
+- **Project**: [HarmoniaCore](https://github.com/OneOfWolvesBilly/HarmoniaCore)
