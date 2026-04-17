@@ -171,13 +171,13 @@ public enum AppleCoreFactory {
 ```cpp
 class LinuxCoreFactory {
 public:
-    static std::unique_ptr makePlaybackService() {
-        auto logger = std::make_shared();
-        auto clock = std::make_shared();
-        auto audio = std::make_unique(logger);
-        auto decoder = std::make_unique(logger);
+    static std::unique_ptr<PlaybackService> makePlaybackService() {
+        auto logger = std::make_shared<SpdlogAdapter>();
+        auto clock = std::make_shared<SteadyClockAdapter>();
+        auto audio = std::make_unique<PipeWireOutputAdapter>(logger);
+        auto decoder = std::make_unique<FFmpegDecoderAdapter>(logger);
         
-        return std::make_unique(
+        return std::make_unique<DefaultPlaybackService>(
             std::move(audio),
             std::move(decoder),
             clock,
