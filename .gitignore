@@ -138,3 +138,8 @@ Temporary Items
 
 # Documentation build artifacts
 docs/.build/
+
+# Test / debug output logs accidentally redirected to files
+test-errors.txt
+test-output.txt
+*.test-log
