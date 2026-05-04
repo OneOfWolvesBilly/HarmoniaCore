@@ -17,7 +17,7 @@ architecture**:
 
 1. **Specification repository** — Source of truth for ports, services, models, and parity rules
 2. **Swift reference implementation** — AVFoundation-backed adapter set for Apple platforms
-3. **C++20 Linux implementation** — Planned parity target
+3. **C++20 Linux implementation** — Deferred parity target
 
 HarmoniaCore is consumed as a Swift Package by [HarmoniaPlayer](https://github.com/OneOfWolvesBilly/HarmoniaPlayer), which serves as the reference application and parity harness.
 
@@ -54,10 +54,10 @@ See [Architecture Overview](docs/specs/01_architecture.md) for the full system d
 
 | Component | Swift (Apple) | C++20 (Linux) |
 |-----------|---------------|---------------|
-| Ports | ✅ Implemented | 🚧 Planned |
-| Adapters | ✅ Implemented | 🚧 Planned |
-| Services | ✅ Implemented | 🚧 Planned |
-| Tests | ✅ Available | 🚧 Planned |
+| Ports | ✅ Implemented | 🚧 Deferred |
+| Adapters | ✅ Implemented | 🚧 Deferred |
+| Services | ✅ Implemented | 🚧 Deferred |
+| Tests | ✅ Available | 🚧 Deferred |
 
 Component-level status only. Version-level progress is tracked in [Roadmap](#roadmap).
 
@@ -124,7 +124,7 @@ For the full file listing of any sub-directory, see the corresponding specificat
 - **[Architecture Overview](docs/specs/01_architecture.md)** — System design, layer responsibilities, data flow
 - **[Adapters Specification](docs/specs/02_adapters.md)** — Cross-platform adapter contract
 - **[Apple Adapters](docs/specs/02_01_apple.adapters.md)** — AVFoundation adapter behavioral specs
-- **[Linux Adapters](docs/specs/02_02_linux.adapters.md)** — C++20 / PipeWire adapter specs (planned)
+- **[Linux Adapters](docs/specs/02_02_linux.adapters.md)** — C++20 / PipeWire adapter specs (deferred)
 - **[Ports Specification](docs/specs/03_ports.md)** — Port protocols and semantics
 - **[Services Specification](docs/specs/04_services.md)** — PlaybackService and high-level service contracts
 - **[Models Specification](docs/specs/05_models.md)** — StreamInfo, TagBundle, CoreError, and validation rules
@@ -133,12 +133,12 @@ For the full file listing of any sub-directory, see the corresponding specificat
 
 ### Implementation Guides
 - **[Apple Adapters Implementation](docs/impl/02_01_apple.adapters_impl.md)** — Swift adapter code patterns
-- **[Linux Adapters Implementation](docs/impl/02_02_linux.adapters_impl.md)** — C++20 adapter patterns (planned)
+- **[Linux Adapters Implementation](docs/impl/02_02_linux.adapters_impl.md)** — C++20 adapter patterns (deferred)
 - **[Ports Implementation](docs/impl/03_ports_impl.md)** — Concrete Swift / C++ port shapes
 - **[Services Implementation](docs/impl/04_services_impl.md)** — Service wiring and usage examples
 - **[Models Implementation](docs/impl/05_models_impl.md)** — Model definitions and validation logic
 - **[Swift Testing Implementation](docs/impl/06_01_testing_swift.md)** — XCTest patterns and mock usage
-- **[C++20 Testing Implementation](docs/impl/06_02_testing_cpp.md)** — Google Test patterns (planned)
+- **[C++20 Testing Implementation](docs/impl/06_02_testing_cpp.md)** — Google Test patterns (deferred)
 
 ### Navigation
 - **[Spec → Impl Mapping](docs/specs_to_impl_map.md)** — How specifications map to implementation notes

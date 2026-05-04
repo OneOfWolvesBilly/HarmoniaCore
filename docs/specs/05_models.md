@@ -138,6 +138,7 @@ Contains metadata tags extracted from or to be written to an audio file, along w
 | `replayGainAlbum` | `Double?` | ReplayGain album gain in dB | -1.50 |
 | `comment` | `String?` | Free-form comment | "Live at Carnegie Hall" |
 | `artworkData` | `Data?` / `ByteArray?` | Embedded cover art (raw image bytes) | JPEG/PNG data |
+| `lyrics` | `[LyricsLanguageVariant]?` | Embedded USLT lyrics, one entry per language variant | see `LyricsLanguageVariant` below |
 
 #### Technical info fields
 
@@ -148,11 +149,13 @@ Contains metadata tags extracted from or to be written to an audio file, along w
 | `sampleRate` | `Double?` | Sample rate in Hz | 44100.0 |
 | `channels` | `Int?` | Number of audio channels (1 = mono, 2 = stereo) | 2 |
 | `fileSize` | `Int?` | File size in bytes | 14_182_400 |
+| `codec` | `String?` | Container / codec name as reported by the platform decoder | "MPEG-4 AAC", "FLAC" |
+| `encoding` | `String?` | Encoder / encoding profile string when available | "LAME 3.100", "iTunes 12.13" |
 
 ### Schema Version
 
 ```swift
-public static let currentSchemaVersion: Int = 1
+public static let currentSchemaVersion: Int = 2
 ```
 
 Consumers (e.g. HarmoniaPlayer) use `currentSchemaVersion` to detect tracks persisted by an older schema and trigger background metadata re-reads.
@@ -160,6 +163,7 @@ Consumers (e.g. HarmoniaPlayer) use `currentSchemaVersion` to detect tracks pers
 **History:**
 - `0` — legacy (no technical info fields)
 - `1` — added `duration`, `bitrate`, `sampleRate`, `channels`, `fileSize`
+- `2` — added `codec`, `encoding`
 
 > **ReplayGain fields — current status: read-only**
 > `replayGainTrack` and `replayGainAlbum` are populated by `TagReaderPort`
@@ -192,6 +196,7 @@ Consumers (e.g. HarmoniaPlayer) use `currentSchemaVersion` to detect tracks pers
   - Vorbis `ARTIST` → `artist`
   - MP4 `©nam` → `title`
   - MP4 `©ART` → `artist`
+  - ID3v2 `USLT` (one frame per language) → `lyrics` (one `LyricsLanguageVariant` per frame)
 
 - Missing tags MUST result in `nil`/`null` fields, NOT empty strings.
 
@@ -200,7 +205,7 @@ Consumers (e.g. HarmoniaPlayer) use `currentSchemaVersion` to detect tracks pers
 **Swift:**
 ```swift
 public struct TagBundle: Sendable, Equatable {
-    public static let currentSchemaVersion: Int = 1
+    public static let currentSchemaVersion: Int = 2
 
     // Tag fields
     public var title: String?
@@ -219,6 +224,7 @@ public struct TagBundle: Sendable, Equatable {
     public var replayGainAlbum: Double?
     public var comment: String?
     public var artworkData: Data?
+    public var lyrics: [LyricsLanguageVariant]?
 
     // Technical info fields (excluded from isEmpty)
     public var duration: TimeInterval?
@@ -226,6 +232,8 @@ public struct TagBundle: Sendable, Equatable {
     public var sampleRate: Double?
     public var channels: Int?
     public var fileSize: Int?
+    public var codec: String?
+    public var encoding: String?
 
     public init() {}
 }
@@ -234,7 +242,7 @@ public struct TagBundle: Sendable, Equatable {
 **C++:**
 ```cpp
 struct TagBundle {
-    static constexpr int current_schema_version = 1;
+    static constexpr int current_schema_version = 2;
 
     // Tag fields
     std::optional<std::string> title;
@@ -253,6 +261,7 @@ struct TagBundle {
     std::optional<double>      replay_gain_album;
     std::optional<std::string> comment;
     std::optional<std::vector<uint8_t>> artwork_data;
+    std::optional<std::vector<LyricsLanguageVariant>> lyrics;
 
     // Technical info fields (excluded from is_empty)
     std::optional<double>      duration;     // seconds
@@ -260,6 +269,8 @@ struct TagBundle {
     std::optional<double>      sample_rate;  // Hz
     std::optional<int>         channels;
     std::optional<int64_t>     file_size;    // bytes
+    std::optional<std::string> codec;
+    std::optional<std::string> encoding;
 
     bool operator==(const TagBundle&) const = default;
 };
@@ -300,7 +311,65 @@ struct TagBundle {
 
 ---
 
+## LyricsLanguageVariant
+
+Represents one language variant of embedded USLT lyrics. A single audio file may carry multiple `USLT` frames in different languages; each frame maps to one `LyricsLanguageVariant`.
+
+### Fields
+
+| Field | Type | Description | Constraints |
+|-------|------|-------------|-------------|
+| `languageCode` | `String?` | ISO 639-2 three-letter language code (e.g. `"eng"`, `"chi"`, `"jpn"`) | `nil` when the source frame has no language declared or uses the `"und"` sentinel |
+| `text` | `String` | Raw lyrics text as stored in the frame | Not pre-processed; LRC-style timestamps are NOT stripped at this layer |
+
+### Semantics
+
+- **languageCode:**  
+  Sourced from the language field of the `USLT` frame. The model preserves the value as read; mapping `"und"` and the empty string to `nil` is the responsibility of the reader adapter.
+
+- **text:**  
+  Raw text. Callers (e.g. a `LyricsService`) are responsible for stripping LRC-style timestamps when the source is a sidecar `.lrc` file or when timestamped USLT content needs presentation cleanup.
+
+- **Multiplicity:**  
+  Multiple variants per file are expected. Order MUST follow the order of `USLT` frames in the source file.
+
+### Illustrative Shapes
+
+**Swift:**
+```swift
+public struct LyricsLanguageVariant: Codable, Equatable, Sendable {
+    public let languageCode: String?
+    public let text: String
+
+    public init(languageCode: String?, text: String) {
+        self.languageCode = languageCode
+        self.text = text
+    }
+}
+```
+
+**C++:**
+```cpp
+struct LyricsLanguageVariant {
+    std::optional<std::string> language_code;
+    std::string text;
+
+    bool operator==(const LyricsLanguageVariant&) const = default;
+};
+```
+
+### Parity Requirements
+
+**Exact Match Required:**
+- `text` MUST match exactly, byte-for-byte, after UTF-8 normalization
+- `languageCode` MUST match exactly, including the `nil` vs non-`nil` status
+
+---
+
 ## CueTrack
+
+> **Status: Planned**  
+> No `CueTrack` type currently exists in `apple-swift/Sources/Models/`. This section describes the intended model for a future implementation.
 
 Represents a single track entry parsed from a CUE sheet.
 
@@ -398,6 +467,9 @@ struct CueTrack {
 ---
 
 ## CueSheet
+
+> **Status: Planned**  
+> No `CueSheet` type currently exists in `apple-swift/Sources/Models/`. This section describes the intended model for a future implementation.
 
 Represents a fully parsed CUE sheet file.
 
@@ -632,7 +704,7 @@ Used by `DecoderPort` to track open decode sessions.
 ## Thread Safety Considerations
 
 ### Immutable Models
-- `StreamInfo`, `CueTrack`, `CueSheet` are immutable → naturally thread-safe.
+- `StreamInfo`, `CueTrack`, `CueSheet`, `LyricsLanguageVariant` are immutable → naturally thread-safe.
 - `TagBundle` fields are independent → safe to read concurrently if not mutated.
 
 ### Mutable Models

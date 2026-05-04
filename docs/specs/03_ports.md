@@ -280,6 +280,62 @@ protocol AudioOutputPort {
 
 ---
 
+## EQPort
+
+Provides an in-chain equaliser DSP node that sits between the decoder and the audio output. Exposes a runtime control surface (enable / preamp / per-band gain) and a one-shot graph-attach call.
+
+### Interface
+
+```text
+protocol EQPort {
+    var isEnabled: Bool { get set }
+    var preamp: Float { get set }
+    var bandGains: [Float] { get set }
+
+    attach(engine: AudioEngineHandle,
+           previous: AudioNodeHandle,
+           next: AudioNodeHandle,
+           format: AudioFormat?) throws
+}
+```
+
+### Semantics
+
+**isEnabled**
+- When `false`, the EQ node MUST pass audio through unchanged regardless of `preamp` or `bandGains`.
+- Default state on construction: `false` (bypassed).
+
+**preamp**
+- Master preamp gain in decibels, applied after band processing.
+- Range: `±12 dB`. Implementations MUST clamp out-of-range writes.
+- Default value: `0`.
+
+**bandGains**
+- Per-band gain values in decibels.
+- Array length is fixed at `10` for the current band layout (32 / 64 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz, see `02_01_apple.adapters.md` §2.11 for the Apple adapter's exact frequencies).
+- Range: `±12 dB` per band. Implementations MUST clamp out-of-range writes.
+- Default value: all bands at `0` (flat).
+- Implementations SHOULD tolerate length mismatch on write by applying the prefix that fits and ignoring missing or surplus entries.
+
+**attach(engine, previous, next, format)**
+- Attaches the EQ DSP node to the platform audio engine and inserts it into the audio chain between `previous` and `next`.
+- The implementation is responsible for the full segment wiring: `previous → eq` AND `eq → next`. Any pre-existing `previous → next` connection MUST be replaced.
+- Called once before audio flows through the chain.
+- Thread Safety: MUST be called on main thread; concurrent calls are undefined.
+- Throws an implementation-defined error if attachment fails.
+
+### Platform Type Mapping
+
+The `attach` parameters are platform-neutral handles. Concrete platform mappings are defined in adapter specifications:
+
+| Platform-neutral type | Apple (AVFoundation) | Linux (PipeWire/Native) |
+|---|---|---|
+| `AudioEngineHandle` | `AVAudioEngine` | (TBD) |
+| `AudioNodeHandle` | `AVAudioNode` | (TBD) |
+| `AudioFormat` | `AVAudioFormat` | (TBD) |
+
+---
+
 ## TagReaderPort
 
 Reads metadata tags from audio files.
@@ -343,6 +399,9 @@ protocol TagWriterPort {
 ---
 
 ## CueSheetPort
+
+> **Status: Planned**  
+> No `CueSheetPort` adapter currently exists in `apple-swift/Sources/`. The contract below describes the intended interface for a future implementation.
 
 Parses CUE sheet files and returns a structured `CueSheet` model.
 

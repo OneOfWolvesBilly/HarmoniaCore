@@ -1,5 +1,8 @@
 # Linux Adapters (PipeWire / ALSA / libsndfile)
 
+> **Status: Deferred**  
+> The C++20/Linux implementation of HarmoniaCore is currently deferred. This document describes the intended adapter contracts; no Linux adapter code currently exists. See the [HarmoniaCore Roadmap](../../README.md#roadmap) for the canonical status.
+
 ## Overview
 
 Linux adapters implement the same Ports using native libraries:
