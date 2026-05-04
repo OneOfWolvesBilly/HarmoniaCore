@@ -296,6 +296,9 @@ public:
 
 ## 4.3 CueSheetService
 
+> **Status: Planned**  
+> No `CueSheetService` implementation currently exists in `apple-swift/Sources/`. This section describes the intended service contract for a future implementation.
+
 `CueSheetService` provides CUE sheet parsing as a composable service.
 It wraps `CueSheetPort` and exposes the result to the application layer.
 
@@ -396,6 +399,7 @@ public:
 | `AudioOutputPort` | Required | Outputs PCM to audio hardware |
 | `ClockPort` | Required | Provides timing for position tracking |
 | `LoggerPort` | Required | Logs events for debugging |
+| `EQPort` | Required | In-chain equaliser DSP node |
 | `FileAccessPort` | Optional | Direct file access if needed |
 
 ### CueSheetService Port Dependencies
@@ -423,14 +427,17 @@ public enum CoreFactory {
         let clock   = MonotonicClockAdapter()
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
         let audio   = AVAudioEngineOutputAdapter(logger: logger)
+        let eq      = AVAudioUnitEQAdapter()
         return DefaultPlaybackService(
             decoder: decoder,
             audio:   audio,
             clock:   clock,
-            logger:  logger
+            logger:  logger,
+            eq:      eq
         )
     }
 
+    // Planned: CueSheetService and NativeCueSheetAdapter are not yet implemented.
     public static func makeDefaultCueSheetService() -> CueSheetService {
         let port = NativeCueSheetAdapter()
         return DefaultCueSheetService(port: port)

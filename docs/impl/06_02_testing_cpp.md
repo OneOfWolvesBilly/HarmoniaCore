@@ -1,8 +1,11 @@
 # C++20 Testing Implementation Guide
 
+> **Status: Deferred**  
+> The C++20/Linux implementation of HarmoniaCore is currently deferred. This document describes the intended testing approach; no Linux test code currently exists. See the [HarmoniaCore Roadmap](../../README.md#roadmap) for the canonical status.
+
 This document provides C++20-specific testing implementation details for HarmoniaCore on Linux platforms.
 
-**See also**: [Test Strategy](../test_strategy.md) for platform-agnostic testing philosophy.
+**See also**: [Test Strategy](../specs/06_test_strategy.md) for platform-agnostic testing philosophy.
 
 ---
 

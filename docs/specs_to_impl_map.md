@@ -13,6 +13,8 @@ This document shows how specification files map to implementation notes.
 | `specs/03_ports.md` | `impl/03_ports_impl.md` | Concrete Swift / C++ shapes. |
 | `specs/04_services.md` | `impl/04_services_impl.md` | Service wiring and examples. |
 | `specs/05_models.md` | `impl/05_models_impl.md` | Swift/C++ model definitions. |
+| `specs/06_test_strategy.md` | `impl/06_01_testing_swift.md`<br>`impl/06_02_testing_cpp.md` | Per-platform testing details. |
+| `specs/07_api-parity.md` | (n/a) | Cross-platform behavior validation rules. |
 
 ## How to Use
 
@@ -32,11 +34,15 @@ docs/
 │   ├── 02_02_linux.adapters.md
 │   ├── 03_ports.md
 │   ├── 04_services.md
-│   └── 05_models.md
+│   ├── 05_models.md
+│   ├── 06_test_strategy.md
+│   └── 07_api-parity.md
 └── impl/                   # Platform-specific implementation notes
     ├── 02_01_apple.adapters_impl.md
     ├── 02_02_linux.adapters_impl.md
     ├── 03_ports_impl.md
     ├── 04_services_impl.md
-    └── 05_models_impl.md
+    ├── 05_models_impl.md
+    ├── 06_01_testing_swift.md
+    └── 06_02_testing_cpp.md
 ```

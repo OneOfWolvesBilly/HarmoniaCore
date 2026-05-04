@@ -108,6 +108,9 @@ Each adapter implements one Port interface and translates platform-specific APIs
 
 ### 2.6 FlacDecoderAdapter : DecoderPort (macOS Pro)
 
+> **Status: Planned**  
+> No `FlacDecoderAdapter` currently exists in `apple-swift/Sources/`. The behaviour below describes the intended adapter for a future macOS Pro build. On standard builds, FLAC decoding currently falls through to `AVAssetReaderDecoderAdapter` semantics.
+
 - Uses **libFLAC** or **dr_flac** for FLAC decoding.
 - Converts FLAC → interleaved Float32 PCM.
 - Only available in macOS Pro builds (requires static linking of libFLAC).
@@ -116,6 +119,9 @@ Each adapter implements one Port interface and translates platform-specific APIs
 ---
 
 ### 2.7 DsdDecoderAdapter : DecoderPort (macOS Pro)
+
+> **Status: Planned**  
+> No `DsdDecoderAdapter` currently exists in `apple-swift/Sources/`. The behaviour below describes the intended adapter for a future macOS Pro build.
 
 - Uses **dsd2pcm** library for DSD to PCM conversion.
 - Supports DSF and DFF container formats.
@@ -249,6 +255,44 @@ The previous `removeItem` + `moveItem` pattern silently dropped these and is no 
 
 - Format or capability refusal → `CoreError.unsupported(String)`
 - Export session failure, file replacement failure, underlying I/O error → `CoreError.ioError(underlying: Error)`
+
+---
+
+### 2.11 AVAudioUnitEQAdapter : EQPort
+
+10-band parametric graphic EQ backed by `AVAudioUnitEQ`.
+
+**Band layout (fixed, 10 bands):**
+
+| Index | Centre frequency |
+|---|---|
+| 0 | 32 Hz |
+| 1 | 64 Hz |
+| 2 | 125 Hz |
+| 3 | 250 Hz |
+| 4 | 500 Hz |
+| 5 | 1 kHz |
+| 6 | 2 kHz |
+| 7 | 4 kHz |
+| 8 | 8 kHz |
+| 9 | 16 kHz |
+
+**Filter parameters (every band):**
+- `filterType`: `.parametric`
+- `bandwidth`: `2.0` octaves (equivalent to Butterworth Q ≈ 0.7071)
+
+**Gain limits:**
+- Per-band gain: clamped to `±12 dB`
+- Preamp (mapped to `AVAudioUnitEQ.globalGain`): clamped to `±12 dB`
+
+**Default state on construction:**
+- `isEnabled = false` (bypass on)
+- All band gains at `0`
+- Preamp at `0`
+
+**Tolerant `bandGains` setter:** the adapter applies `min(input.count, 10)` entries and silently ignores length mismatch.
+
+**Graph attach:** `attach(to:between:and:format:)` calls `engine.attach(eq)`, disconnects `previous`'s existing output, then connects `previous → eq → next` using the supplied `AVAudioFormat`.
 
 ---
 

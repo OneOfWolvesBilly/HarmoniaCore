@@ -1,5 +1,8 @@
 # Linux Adapters Implementation (C++20)
 
+> **Status: Deferred**  
+> The C++20/Linux implementation of HarmoniaCore is currently deferred. This document describes the intended adapter implementations; no Linux adapter code currently exists. See the [HarmoniaCore Roadmap](../../README.md#roadmap) for the canonical status.
+
 This document describes C++20 implementations of adapters for the Linux platform.
 
 **Spec Reference:** [`specs/02_02_linux.adapters.md`](../specs/02_02_linux.adapters.md)

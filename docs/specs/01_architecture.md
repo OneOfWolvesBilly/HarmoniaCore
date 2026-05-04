@@ -223,6 +223,6 @@ Every implementation must pass **behavior-parity tests** between Swift and C++20
 
 | File | Purpose |
 |------|----------|
-| `docs/specs/api-parity.md` | Behavior contract between Swift and C++ implementations |
-| `docs/specs/behavior-flow.md` | Runtime and data flow diagram |
-| `docs/specs/testing-strategy.md` | CI parity validation procedures |
+| `docs/specs/06_test_strategy.md` | CI parity validation procedures |
+| `docs/specs/07_api-parity.md` | Behavior contract between Swift and C++ implementations |
+| `docs/specs/behavior-flow.md` | Runtime workflow and data flow walkthrough across services (planned, post-v1.0) |
