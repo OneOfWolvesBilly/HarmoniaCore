@@ -158,22 +158,17 @@ if (result < 0) {
 
 **Specific Requirements:**
 
-1. **FileAccessPort:**
-   - MUST handle concurrent reads from different threads
-   - File handles MUST be thread-local or properly synchronized
-   - MUST handle `EINTR` retries gracefully (POSIX)
-
-2. **DecoderPort:**
+1. **DecoderPort:**
    - MUST support decoding on background threads
    - Seek operations MUST be atomic
    - MUST protect internal state with appropriate synchronization
 
-3. **AudioOutputPort:**
+2. **AudioOutputPort:**
    - Render callback MUST be real-time safe
    - MUST NOT block or allocate memory in render path
    - State changes MUST be lock-free or use wait-free queues
 
-4. **MonotonicTimePort:**
+3. **MonotonicTimePort:**
    - MUST provide monotonic time across all threads
    - MUST NOT require synchronization for read-only operations
 

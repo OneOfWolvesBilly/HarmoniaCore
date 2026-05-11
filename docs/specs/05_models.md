@@ -667,36 +667,12 @@ public:
 
 ## Additional Types
 
-### FileHandleToken (Opaque)
-
-Used by `FileAccessPort` to track open file handles.
-
-**Requirements:**
-- MUST be hashable/comparable for use in collections.
-- MUST be unique per open file operation.
-
-**Swift:**
-```swift
-public struct FileHandleToken: Hashable, Sendable {
-    let id: UUID
-    public init(id: UUID) { self.id = id }
-}
-```
-
-**C++:**
-```cpp
-struct FileHandleToken {
-    std::string id;
-    bool operator==(const FileHandleToken&) const = default;
-};
-```
-
 ### DecodeHandle (Opaque)
 
 Used by `DecoderPort` to track open decode sessions.
 
 **Requirements:**
-- Similar to `FileHandleToken` - opaque, unique, hashable.
+- Opaque, unique, hashable identifier for tracking decode sessions.
 - Implementation may wrap native decoder handles (e.g., `AVAssetReader*`, `AVFormatContext*`).
 
 ---

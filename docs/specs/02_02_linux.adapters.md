@@ -12,7 +12,6 @@ Linux adapters implement the same Ports using native libraries:
 | **AudioOutputPort** | `PipeWireOutputAdapter` | PipeWire | Real-time low-latency playback. Uses ring buffer to push PCM frames. Auto-fallback to ALSA if PipeWire unavailable. |
 | **DecoderPort** | `FFmpegDecoderAdapter` | FFmpeg | Primary decoder; supports WAV, AIFF, FLAC, MP3, AAC, Opus, Vorbis. May require non-free license flag for some codecs. |
 | **DecoderPort (fallback)** | `LibSndFileDecoderAdapter` | libsndfile / libFLAC | Fallback decoder; supports WAV, AIFF, FLAC; can use mpg123 for MP3. |
-| **FileAccessPort** | `PosixFileAccessAdapter` | POSIX syscalls | Implements `open`, `read`, `lseek`, and `close`. |
 | **TagReaderPort** | `TagLibTagReaderAdapter` | TagLib | Reads ID3, Vorbis, and MP4 metadata. |
 | **TagWriterPort** | `TagLibTagWriterAdapter` | TagLib | Writes common metadata tags. |
 | **MonotonicTimePort** | `SteadyClockAdapter` | std::chrono | Provides monotonic time for latency metrics. |
@@ -68,21 +67,6 @@ Each adapter provides a concrete implementation of a HarmoniaCore Port.
 
 **Note:** If `steady_clock` precision is lower than nanosecond (e.g., microsecond on some systems),
 the adapter MUST still return nanoseconds by multiplying the value appropriately.
-
----
-
-### 2.4 PosixFileAccessAdapter : FileAccessPort
-
-- Wraps POSIX syscalls (`open`, `read`, `lseek`, `close`).  
-- Must handle partial reads and `EINTR` retries gracefully.  
-- Should not perform any blocking I/O on main thread.
-- Thread-safe: Must handle concurrent file operations safely.
-
-**Error Handling Requirements:**
-- `ENOENT` → `CoreError.notFound`
-- `EACCES`, `EPERM` → `CoreError.ioError`
-- `EINTR` → Retry operation automatically
-- Other errno values → `CoreError.ioError` with descriptive message
 
 ---
 
