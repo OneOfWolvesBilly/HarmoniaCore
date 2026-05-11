@@ -35,7 +35,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 | **FileAccessPort** | `SandboxFileAccessAdapter` | `PosixFileAccessAdapter` |
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | `TagLibTagReaderAdapter` |
 | **TagWriterPort** | `AVMutableTagWriterAdapter`² | `TagLibTagWriterAdapter` |
-| **ClockPort** | `MonotonicClockAdapter` | `SteadyClockAdapter` |
+| **MonotonicTimePort** | `MonotonicTimeAdapter` | `SteadyClockAdapter` |
 | **LoggerPort** | `OSLogAdapter`<br>`NoopLogger` | `StdErrLogger`<br>`SpdlogAdapter` |
 
 **Notes:**
@@ -52,7 +52,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 
 - **OSLogAdapter : LoggerPort** — Forwards messages to the Unified Logging system.  
 - **NoopLogger : LoggerPort** — Discards all messages (used in tests).  
-- **MonotonicClockAdapter : ClockPort** — Returns monotonic time in nanoseconds via `DispatchTime`.  
+- **MonotonicTimeAdapter : MonotonicTimePort** — Returns monotonic time in nanoseconds via `DispatchTime`.  
 - **SandboxFileAccessAdapter : FileAccessPort** — Provides sandbox-safe file I/O using `FileHandle`.  
 - **AVAssetReaderDecoderAdapter : DecoderPort** — Decodes via `AVAssetReader` to interleaved Float32 PCM.  
 - **FlacDecoderAdapter : DecoderPort** — Decodes FLAC using `libFLAC` (planned for macOS Pro).  
@@ -86,7 +86,7 @@ The Apple implementation uses the following decoder selection strategy:
 
 - **StdErrLogger : LoggerPort** — Writes messages to stderr.  
 - **SpdlogAdapter : LoggerPort** — Uses spdlog library for structured logging.  
-- **SteadyClockAdapter : ClockPort** — Uses `std::chrono::steady_clock`.  
+- **SteadyClockAdapter : MonotonicTimePort** — Uses `std::chrono::steady_clock`.  
 - **PosixFileAccessAdapter : FileAccessPort** — Wraps POSIX open/read/lseek/close.  
 - **FFmpegDecoderAdapter : DecoderPort** — Uses libavformat/libavcodec for decoding.  
 - **LibSndFileDecoderAdapter : DecoderPort** — Uses libsndfile for uncompressed formats.  
@@ -153,7 +153,7 @@ Concrete adapter instances MUST be created by a platform-specific composition ro
 public enum AppleCoreFactory {
     public static func makePlaybackService() -> PlaybackService {
         let logger = OSLogAdapter()
-        let clock = MonotonicClockAdapter()
+        let clock = MonotonicTimeAdapter()
         let audio = AVAudioEngineOutputAdapter(logger: logger)
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
         

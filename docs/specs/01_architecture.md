@@ -39,7 +39,7 @@ Core layers (Dependency View):
 | Layer | Responsibility | Examples |
 |-------|----------------|-----------|
 | **Services** | Implements playback, metadata, and library logic using Ports | `PlaybackService.play()`, `TagService.read()` |
-| **Ports** | Defines abstract interfaces for I/O and timing | `AudioOutputPort`, `DecoderPort`, `ClockPort` |
+| **Ports** | Defines abstract interfaces for I/O and timing | `AudioOutputPort`, `DecoderPort`, `MonotonicTimePort` |
 | **Adapters** | Implements Ports using platform APIs | `AVAudioEngineOutputAdapter`, `PipeWireOutputAdapter` |
 | **Models** | Simple cross-platform data structures | `StreamInfo`, `TagBundle`, `CoreError` |
 | **Utils** | Shared helpers (math, time, string) | `TimeFormatter`, `ErrorMapper` |
@@ -84,7 +84,7 @@ Track → DecoderPort → AudioOutputPort → System Audio Device
 - **PlaybackService** coordinates decoding and output.  
 - **DecoderPort** produces PCM frames.  
 - **AudioOutputPort** delivers frames to the hardware layer.  
-- **ClockPort** tracks playback position.  
+- **MonotonicTimePort** tracks playback position.  
 - **LoggerPort** records events for parity validation.
 
 ---
@@ -95,7 +95,7 @@ Track → DecoderPort → AudioOutputPort → System Audio Device
 |----------|-------------|
 | **Error propagation** | All recoverable errors use `CoreError` enumeration (cross-platform). See [Error Mapping Rules](#error-mapping-rules). |
 | **Threading model** | Services are thread-safe; decoding and rendering may run on worker threads. All Ports MUST be safe to call from any thread unless explicitly documented otherwise. |
-| **Timing consistency** | All timestamps use `ClockPort.now()` for deterministic results. Clock precision MUST be nanosecond or better. |
+| **Timing consistency** | All timestamps use `MonotonicTimePort.now()` for deterministic results. Clock precision MUST be nanosecond or better. |
 
 ### Error Mapping Rules
 
@@ -173,7 +173,7 @@ if (result < 0) {
    - MUST NOT block or allocate memory in render path
    - State changes MUST be lock-free or use wait-free queues
 
-4. **ClockPort:**
+4. **MonotonicTimePort:**
    - MUST provide monotonic time across all threads
    - MUST NOT require synchronization for read-only operations
 

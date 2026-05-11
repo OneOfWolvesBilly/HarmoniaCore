@@ -267,7 +267,7 @@ protected:
     void SetUp() override {
         mock_decoder = std::make_shared<MockDecoderPort>();
         mock_audio = std::make_shared<MockAudioOutputPort>();
-        mock_clock = std::make_shared<MockClockPort>();
+        mock_clock = std::make_shared<MockMonotonicTimePort>();
         logger = std::make_shared<NoopLogger>();
         
         service = std::make_unique<DefaultPlaybackService>(
@@ -288,7 +288,7 @@ protected:
     
     std::shared_ptr<MockDecoderPort> mock_decoder;
     std::shared_ptr<MockAudioOutputPort> mock_audio;
-    std::shared_ptr<MockClockPort> mock_clock;
+    std::shared_ptr<MockMonotonicTimePort> mock_clock;
     std::shared_ptr<NoopLogger> logger;
     std::unique_ptr<DefaultPlaybackService> service;
 };

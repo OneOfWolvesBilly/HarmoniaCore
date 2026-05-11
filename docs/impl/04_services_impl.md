@@ -27,7 +27,7 @@ public final class DefaultPlaybackService: PlaybackService {
     // Dependencies (Ports)
     private let decoder: DecoderPort
     private let audio: AudioOutputPort
-    private let clock: ClockPort
+    private let clock: MonotonicTimePort
     private let logger: LoggerPort
     
     // Internal state
@@ -40,7 +40,7 @@ public final class DefaultPlaybackService: PlaybackService {
     
     public init(decoder: DecoderPort,
                 audio: AudioOutputPort,
-                clock: ClockPort,
+                clock: MonotonicTimePort,
                 logger: LoggerPort) {
         self.decoder = decoder
         self.audio = audio
@@ -254,7 +254,7 @@ class DefaultPlaybackService : public PlaybackService {
 private:
     std::unique_ptr<DecoderPort> decoder_;
     std::unique_ptr<AudioOutputPort> audio_;
-    std::shared_ptr<ClockPort> clock_;
+    std::shared_ptr<MonotonicTimePort> clock_;
     std::shared_ptr<LoggerPort> logger_;
     
     std::optional<DecodeHandle> current_handle_;
@@ -269,7 +269,7 @@ public:
     DefaultPlaybackService(
         std::unique_ptr<DecoderPort> decoder,
         std::unique_ptr<AudioOutputPort> audio,
-        std::shared_ptr<ClockPort> clock,
+        std::shared_ptr<MonotonicTimePort> clock,
         std::shared_ptr<LoggerPort> logger)
         : decoder_(std::move(decoder))
         , audio_(std::move(audio))
@@ -406,7 +406,7 @@ private:
 public enum CoreFactory {
     public static func makePlaybackService() -> PlaybackService {
         let logger = OSLogAdapter()
-        let clock = MonotonicClockAdapter()
+        let clock = MonotonicTimeAdapter()
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
         let audio = AVAudioEngineOutputAdapter(logger: logger)
         

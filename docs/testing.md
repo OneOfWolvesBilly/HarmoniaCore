@@ -28,7 +28,7 @@ apple-swift/
 └── Tests/
     └── HarmoniaCoreTests/
         ├── TestSupport/
-        │   ├── MockClockPort.swift
+        │   ├── MockMonotonicTimePort.swift
         │   ├── MockDecoderPort.swift
         │   ├── MockAudioOutputPort.swift
         │   ├── MockFileAccessPort.swift
@@ -144,7 +144,7 @@ final class PlaybackServiceTests: XCTestCase {
     var service: PlaybackService!
     var mockDecoder: MockDecoderPort!
     var mockAudio: MockAudioOutputPort!
-    var mockClock: MockClockPort!
+    var mockClock: MockMonotonicTimePort!
     var mockLogger: NoopLogger!
     
     override func setUp() {
@@ -152,7 +152,7 @@ final class PlaybackServiceTests: XCTestCase {
         
         mockDecoder = MockDecoderPort()
         mockAudio = MockAudioOutputPort()
-        mockClock = MockClockPort()
+        mockClock = MockMonotonicTimePort()
         mockLogger = NoopLogger()
         
         service = DefaultPlaybackService(

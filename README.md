@@ -33,7 +33,7 @@ HarmoniaCore is consumed as a Swift Package by [HarmoniaPlayer](https://github.c
 +-----------+-------------+
             |
 +-----------v-------------+
-|        Ports Layer      |  <-- DecoderPort, AudioOutputPort, ClockPort, ...
+|        Ports Layer      |  <-- DecoderPort, AudioOutputPort, MonotonicTimePort, ...
 +-----------+-------------+
             |
 +-----------v-------------+
@@ -102,7 +102,7 @@ For comprehensive testing guidance — mock usage patterns, CI configuration, an
 HarmoniaCore/
 ├── apple-swift/              # Swift reference implementation
 │   ├── Sources/HarmoniaCore/
-│   │   ├── Ports/            # Port protocols (LoggerPort, ClockPort, ...)
+│   │   ├── Ports/            # Port protocols (LoggerPort, MonotonicTimePort, ...)
 │   │   ├── Adapters/         # Apple platform adapters (AVFoundation, OSLog, ...)
 │   │   ├── Services/         # PlaybackService protocol and default implementation
 │   │   └── Models/           # StreamInfo, TagBundle, CoreError

@@ -60,14 +60,14 @@ public final class NoopLogger: LoggerPort {
 
 ---
 
-## MonotonicClockAdapter : ClockPort
+## MonotonicTimeAdapter : MonotonicTimePort
 
 Uses `DispatchTime` for nanosecond precision monotonic time.
 
 ```swift
 import Dispatch
 
-public final class MonotonicClockAdapter: ClockPort {
+public final class MonotonicTimeAdapter: MonotonicTimePort {
     public init() {}
     
     public func now() -> UInt64 {

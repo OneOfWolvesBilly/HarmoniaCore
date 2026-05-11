@@ -15,7 +15,7 @@ Linux adapters implement the same Ports using native libraries:
 | **FileAccessPort** | `PosixFileAccessAdapter` | POSIX syscalls | Implements `open`, `read`, `lseek`, and `close`. |
 | **TagReaderPort** | `TagLibTagReaderAdapter` | TagLib | Reads ID3, Vorbis, and MP4 metadata. |
 | **TagWriterPort** | `TagLibTagWriterAdapter` | TagLib | Writes common metadata tags. |
-| **ClockPort** | `SteadyClockAdapter` | std::chrono | Provides monotonic time for latency metrics. |
+| **MonotonicTimePort** | `SteadyClockAdapter` | std::chrono | Provides monotonic time for latency metrics. |
 | **LoggerPort** | `SpdlogAdapter` | spdlog | Structured logging. |
 | **LoggerPort (fallback)** | `StdErrLogger` | iostream | Stderr fallback for environments without spdlog. |
 
@@ -58,7 +58,7 @@ Each adapter provides a concrete implementation of a HarmoniaCore Port.
 
 ---
 
-### 2.3 SteadyClockAdapter : ClockPort
+### 2.3 SteadyClockAdapter : MonotonicTimePort
 
 - Provides monotonic timestamps via `std::chrono::steady_clock`.  
 - Used for latency measurements and deterministic timing.
@@ -274,6 +274,6 @@ public:
 |-------------|-------------|
 | Behavior parity | Frame output and seek behavior must match Swift implementation. |
 | Error mapping | All recoverable errors mapped to `CoreError`. |
-| Timing consistency | All timestamps derived from `ClockPort` for deterministic logs. |
+| Timing consistency | All timestamps derived from `MonotonicTimePort` for deterministic logs. |
 | Thread safety | PipeWire and FFmpeg must operate safely on worker threads. |
 | CI integration | Validated through `ctest` parity workflow on GitHub Actions. |

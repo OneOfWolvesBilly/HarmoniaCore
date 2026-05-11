@@ -13,7 +13,7 @@ Apple adapters implement the common Ports using system frameworks:
 | **FileAccessPort** | `SandboxFileAccessAdapter` | Foundation / Security | iOS / macOS | Manages sandbox-scoped URLs. |
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | AVFoundation | iOS / macOS | Reads ID3 / MP4 metadata. |
 | **TagWriterPort** | `AVMutableTagWriterAdapter` | AVFoundation | iOS / macOS | macOS: writes ID3 / MP4 metadata via `AVAssetExportSession` passthrough. iOS: throws `CoreError.unsupported` (sandbox). |
-| **ClockPort** | `MonotonicClockAdapter` | Dispatch / mach | iOS / macOS | Uses `DispatchTime.now().uptimeNanoseconds`. |
+| **MonotonicTimePort** | `MonotonicTimeAdapter` | Dispatch / mach | iOS / macOS | Uses `DispatchTime.now().uptimeNanoseconds`. |
 | **LoggerPort** | `OSLogAdapter` | os.log | iOS / macOS | Uses unified logging; fallback to no-op. |
 | **LoggerPort** | `NoopLogger` | N/A | iOS / macOS | Discards all messages (used in tests). |
 
@@ -48,7 +48,7 @@ Each adapter implements one Port interface and translates platform-specific APIs
 
 ---
 
-### 2.3 MonotonicClockAdapter : ClockPort
+### 2.3 MonotonicTimeAdapter : MonotonicTimePort
 
 - Returns monotonic time in nanoseconds using `DispatchTime.now().uptimeNanoseconds`.
 - Monotonic guarantee: Time never goes backwards, even across system sleep.
@@ -330,7 +330,7 @@ import HarmoniaCore
 let logger = OSLogAdapter()
 let audio: AudioOutputPort = AVAudioEngineOutputAdapter(logger: logger)
 let decoder: DecoderPort = AVAssetReaderDecoderAdapter(logger: logger)
-let clock = MonotonicClockAdapter()
+let clock = MonotonicTimeAdapter()
 let fileAccess = SandboxFileAccessAdapter()
 
 let svc = PlaybackService(
