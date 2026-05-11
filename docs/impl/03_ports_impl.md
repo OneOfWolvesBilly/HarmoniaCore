@@ -32,11 +32,11 @@ logger.error("Failed to decode frame at position \(position)")
 
 ---
 
-## Swift: ClockPort
+## Swift: MonotonicTimePort
 
 ```swift
 /// Protocol for accessing monotonic system time.
-public protocol ClockPort: Sendable {
+public protocol MonotonicTimePort: Sendable {
     /// Returns monotonic time in nanoseconds since an unspecified epoch.
     func now() -> UInt64
 }
@@ -49,7 +49,7 @@ public protocol ClockPort: Sendable {
 
 **Usage:**
 ```swift
-let clock: ClockPort = MonotonicClockAdapter()
+let clock: MonotonicTimePort = MonotonicTimeAdapter()
 let start = clock.now()
 // ... perform operation ...
 let elapsed = clock.now() - start
@@ -347,12 +347,12 @@ logger->error("Failed to decode frame");
 
 ---
 
-## C++20: ClockPort
+## C++20: MonotonicTimePort
 
 ```cpp
-class ClockPort {
+class MonotonicTimePort {
 public:
-    virtual ~ClockPort() = default;
+    virtual ~MonotonicTimePort() = default;
     
     /// Returns monotonic time in nanoseconds.
     virtual uint64_t now() const = 0;
@@ -361,7 +361,7 @@ public:
 
 **Usage:**
 ```cpp
-std::shared_ptr<ClockPort> clock = std::make_shared<SteadyClockAdapter>();
+std::shared_ptr<MonotonicTimePort> clock = std::make_shared<SteadyClockAdapter>();
 
 auto start = clock->now();
 // ... perform operation ...
@@ -586,7 +586,7 @@ tag_writer->write("/path/to/audio.mp3", tags);
 | Port | Swift Protocol | C++ Abstract Class | Purpose |
 |------|----------------|-------------------|---------|
 | **LoggerPort** | `protocol LoggerPort: Sendable` | `class LoggerPort` | Structured logging |
-| **ClockPort** | `protocol ClockPort: Sendable` | `class ClockPort` | Monotonic time |
+| **MonotonicTimePort** | `protocol MonotonicTimePort: Sendable` | `class MonotonicTimePort` | Monotonic time |
 | **FileAccessPort** | `protocol FileAccessPort: AnyObject` | `class FileAccessPort` | File I/O with seek |
 | **DecoderPort** | `protocol DecoderPort: AnyObject` | `class DecoderPort` | Audio decoding |
 | **AudioOutputPort** | `protocol AudioOutputPort: AnyObject` | `class AudioOutputPort` | Audio playback |
@@ -649,7 +649,7 @@ func stop()                 // ✅ Must NOT throw (spec requirement)
 | Port | Thread Safety Requirement |
 |------|---------------------------|
 | **LoggerPort** | MUST be safe to call from any thread concurrently |
-| **ClockPort** | MUST be safe to call from any thread without synchronization |
+| **MonotonicTimePort** | MUST be safe to call from any thread without synchronization |
 | **FileAccessPort** | Safe for different tokens; undefined for same token |
 | **DecoderPort** | Safe for different handles; undefined for same handle |
 | **AudioOutputPort** | `render()` MUST be real-time safe; others main thread only |

@@ -397,7 +397,7 @@ public:
 |------|----------|---------|
 | `DecoderPort` | Required | Decodes audio files to PCM |
 | `AudioOutputPort` | Required | Outputs PCM to audio hardware |
-| `ClockPort` | Required | Provides timing for position tracking |
+| `MonotonicTimePort` | Required | Provides timing for position tracking |
 | `LoggerPort` | Required | Logs events for debugging |
 | `EQPort` | Required | In-chain equaliser DSP node |
 | `FileAccessPort` | Optional | Direct file access if needed |
@@ -424,7 +424,7 @@ public:
 public enum CoreFactory {
     public static func makeDefaultPlaybackService() -> PlaybackService {
         let logger  = OSLogAdapter(subsystem: "HarmoniaCore", category: "Playback")
-        let clock   = MonotonicClockAdapter()
+        let clock   = MonotonicTimeAdapter()
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
         let audio   = AVAudioEngineOutputAdapter(logger: logger)
         let eq      = AVAudioUnitEQAdapter()

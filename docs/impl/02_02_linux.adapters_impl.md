@@ -119,7 +119,7 @@ public:
 
 ---
 
-## SteadyClockAdapter : ClockPort
+## SteadyClockAdapter : MonotonicTimePort
 
 Provides monotonic time using `std::chrono::steady_clock`.
 
@@ -127,7 +127,7 @@ Provides monotonic time using `std::chrono::steady_clock`.
 #include <chrono>
 #include <cstdint>
 
-class SteadyClockAdapter : public ClockPort {
+class SteadyClockAdapter : public MonotonicTimePort {
 public:
     uint64_t now() const override {
         auto now = std::chrono::steady_clock::now();

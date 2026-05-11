@@ -69,14 +69,14 @@ protocol LoggerPort {
 
 ---
 
-## ClockPort
+## MonotonicTimePort
 
 Provides monotonic time for timing measurements and parity validation.
 
 ### Interface
 
 ```text
-protocol ClockPort {
+protocol MonotonicTimePort {
     now() -> UInt64  // monotonic nanoseconds since unspecified epoch
 }
 ```
