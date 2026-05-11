@@ -58,76 +58,6 @@ print("Operation took \(elapsed) nanoseconds")
 
 ---
 
-## Swift: FileAccessPort
-
-```swift
-/// Opaque token representing an open file handle.
-public struct FileHandleToken: Hashable, Sendable {
-    let id: UUID
-    public init(id: UUID) { self.id = id }
-}
-
-/// Origin for seek operations.
-public enum FileSeekOrigin {
-    case start    // Seek from beginning of file
-    case current  // Seek from current position
-    case end      // Seek from end of file
-}
-
-/// Protocol for platform-neutral file I/O operations.
-public protocol FileAccessPort: AnyObject {
-    func open(url: URL) throws -> FileHandleToken
-    
-    func read(
-        _ token: FileHandleToken,
-        into buffer: UnsafeMutableRawPointer,
-        count: Int
-    ) throws -> Int
-    
-    func seek(
-        _ token: FileHandleToken,
-        offset: Int64,
-        origin: FileSeekOrigin
-    ) throws
-    
-    func size(_ token: FileHandleToken) throws -> Int64
-    func close(_ token: FileHandleToken)
-}
-```
-
-**Key Features:**
-- Random access via `seek()` method
-- Thread-safe for different tokens
-- Sandbox-aware on iOS/macOS
-
-**Usage:**
-```swift
-let fileAccess: FileAccessPort = SandboxFileAccessAdapter()
-
-let token = try fileAccess.open(url: fileURL)
-defer { fileAccess.close(token) }
-
-// Get file size
-let size = try fileAccess.size(token)
-
-// Seek to beginning
-try fileAccess.seek(token, offset: 0, origin: .start)
-
-// Read data
-var buffer = [UInt8](repeating: 0, count: 1024)
-let bytesRead = try buffer.withUnsafeMutableBytes { ptr in
-    try fileAccess.read(token, into: ptr.baseAddress!, count: 1024)
-}
-
-// Skip forward 100 bytes
-try fileAccess.seek(token, offset: 100, origin: .current)
-
-// Seek to 100 bytes before end
-try fileAccess.seek(token, offset: -100, origin: .end)
-```
-
----
-
 ## Swift: DecoderPort
 
 ```swift
@@ -371,70 +301,6 @@ std::cout << "Operation took " << elapsed << " nanoseconds\n";
 
 ---
 
-## C++20: FileAccessPort
-
-```cpp
-struct FileHandleToken {
-    int fd;  // or std::string id, implementation-defined
-    bool operator==(const FileHandleToken&) const = default;
-};
-
-// Hash specialization
-namespace std {
-    template<>
-    struct hash<FileHandleToken> {
-        size_t operator()(const FileHandleToken& token) const {
-            return std::hash<int>{}(token.fd);
-        }
-    };
-}
-
-enum class FileSeekOrigin {
-    Start,
-    Current,
-    End
-};
-
-class FileAccessPort {
-public:
-    virtual ~FileAccessPort() = default;
-    
-    virtual FileHandleToken open(const std::string& url) = 0;
-    virtual int read(FileHandleToken token, void* buffer, int count) = 0;
-    virtual void seek(FileHandleToken token, int64_t offset, FileSeekOrigin origin) = 0;
-    virtual int64_t size(FileHandleToken token) const = 0;
-    virtual void close(FileHandleToken token) = 0;
-};
-```
-
-**Usage:**
-```cpp
-std::unique_ptr<FileAccessPort> file_access = 
-    std::make_unique<PosixFileAccessAdapter>();
-
-auto token = file_access->open("/path/to/file.mp3");
-
-// Get file size
-int64_t file_size = file_access->size(token);
-
-// Seek to beginning
-file_access->seek(token, 0, FileSeekOrigin::Start);
-
-// Read data
-std::vector<uint8_t> buffer(1024);
-int bytes_read = file_access->read(token, buffer.data(), buffer.size());
-
-// Skip forward 100 bytes
-file_access->seek(token, 100, FileSeekOrigin::Current);
-
-// Seek to 100 bytes before end
-file_access->seek(token, -100, FileSeekOrigin::End);
-
-file_access->close(token);
-```
-
----
-
 ## C++20: DecoderPort
 
 ```cpp
@@ -587,7 +453,6 @@ tag_writer->write("/path/to/audio.mp3", tags);
 |------|----------------|-------------------|---------|
 | **LoggerPort** | `protocol LoggerPort: Sendable` | `class LoggerPort` | Structured logging |
 | **MonotonicTimePort** | `protocol MonotonicTimePort: Sendable` | `class MonotonicTimePort` | Monotonic time |
-| **FileAccessPort** | `protocol FileAccessPort: AnyObject` | `class FileAccessPort` | File I/O with seek |
 | **DecoderPort** | `protocol DecoderPort: AnyObject` | `class DecoderPort` | Audio decoding |
 | **AudioOutputPort** | `protocol AudioOutputPort: AnyObject` | `class AudioOutputPort` | Audio playback |
 | **TagReaderPort** | `protocol TagReaderPort: AnyObject` | `class TagReaderPort` | Read metadata |
@@ -597,16 +462,7 @@ tag_writer->write("/path/to/audio.mp3", tags);
 
 ## Key Differences from Original Draft
 
-### 1. FileAccessPort - Added seek() ✅
-
-**Now includes:**
-```swift
-func seek(_ token: FileHandleToken, offset: Int64, origin: FileSeekOrigin) throws
-```
-
-This enables random access file operations essential for certain decoders.
-
-### 2. DecoderPort - Synchronous API ✅
+### 1. DecoderPort - Synchronous API ✅
 
 **Changed from:**
 ```swift
@@ -620,7 +476,7 @@ func open(url: URL) throws -> DecodeHandle  // ✅ Current
 
 **Reason:** AVFoundation's core APIs are synchronous. Use `Task.detached` for background operation.
 
-### 3. TagReaderPort - Synchronous API ✅
+### 2. TagReaderPort - Synchronous API ✅
 
 **Changed from:**
 ```swift
@@ -634,7 +490,7 @@ func read(url: URL) throws -> TagBundle  // ✅ Current
 
 **Reason:** `AVAsset.commonMetadata` is a synchronous property.
 
-### 4. AudioOutputPort - configure() throws, stop() doesn't ✅
+### 3. AudioOutputPort - configure() throws, stop() doesn't ✅
 
 **Updated:**
 ```swift
@@ -650,7 +506,6 @@ func stop()                 // ✅ Must NOT throw (spec requirement)
 |------|---------------------------|
 | **LoggerPort** | MUST be safe to call from any thread concurrently |
 | **MonotonicTimePort** | MUST be safe to call from any thread without synchronization |
-| **FileAccessPort** | Safe for different tokens; undefined for same token |
 | **DecoderPort** | Safe for different handles; undefined for same handle |
 | **AudioOutputPort** | `render()` MUST be real-time safe; others main thread only |
 | **TagReaderPort** | MUST be safe to call from any thread concurrently |

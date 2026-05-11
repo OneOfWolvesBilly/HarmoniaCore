@@ -31,7 +31,6 @@ apple-swift/
         │   ├── MockMonotonicTimePort.swift
         │   ├── MockDecoderPort.swift
         │   ├── MockAudioOutputPort.swift
-        │   ├── MockFileAccessPort.swift
         │   ├── MockTagReaderPort.swift
         │   └── MockTagWriterPort.swift
         ├── Models/

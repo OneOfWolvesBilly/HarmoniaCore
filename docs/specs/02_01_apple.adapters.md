@@ -10,7 +10,6 @@ Apple adapters implement the common Ports using system frameworks:
 | **DecoderPort** | `AVAssetReaderDecoderAdapter` | AVFoundation | iOS / macOS | Reads MP3, AAC, ALAC, WAV, AIFF, and CAF. |
 | **DecoderPort (Pro)** | `FlacDecoderAdapter` | Embedded C (`dr_flac` / `libFLAC`) | macOS Pro | Converts FLAC → Float32 PCM. |
 | **DecoderPort (Pro)** | `DsdDecoderAdapter` | Embedded C (`dsd2pcm`) | macOS Pro | Converts DSF / DFF → PCM. |
-| **FileAccessPort** | `SandboxFileAccessAdapter` | Foundation / Security | iOS / macOS | Manages sandbox-scoped URLs. |
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | AVFoundation | iOS / macOS | Reads ID3 / MP4 metadata. |
 | **TagWriterPort** | `AVMutableTagWriterAdapter` | AVFoundation | iOS / macOS | macOS: writes ID3 / MP4 metadata via `AVAssetExportSession` passthrough. iOS: throws `CoreError.unsupported` (sandbox). |
 | **MonotonicTimePort** | `MonotonicTimeAdapter` | Dispatch / mach | iOS / macOS | Uses `DispatchTime.now().uptimeNanoseconds`. |
@@ -54,20 +53,6 @@ Each adapter implements one Port interface and translates platform-specific APIs
 - Monotonic guarantee: Time never goes backwards, even across system sleep.
 - Precision: Nanosecond resolution.
 - Thread-safe: Can be called from any thread without synchronization.
-
----
-
-### 2.4 SandboxFileAccessAdapter : FileAccessPort
-
-- Opens files in a sandbox-safe way via `FileHandle`.  
-- Tracks handles using `FileHandleToken(UUID)`.  
-- Implements `open`, `read`, `size`, and `close`.
-- Thread-safe: Maintains thread-local or synchronized file handle access.
-
-**Security Considerations:**
-- Respects iOS sandbox restrictions.
-- Requires security-scoped bookmarks for persistent file access on iOS.
-- All file operations validate sandbox permissions before execution.
 
 ---
 
@@ -330,15 +315,13 @@ import HarmoniaCore
 let logger = OSLogAdapter()
 let audio: AudioOutputPort = AVAudioEngineOutputAdapter(logger: logger)
 let decoder: DecoderPort = AVAssetReaderDecoderAdapter(logger: logger)
-let clock = MonotonicTimeAdapter()
-let fileAccess = SandboxFileAccessAdapter()
+let time = MonotonicTimeAdapter()
 
 let svc = PlaybackService(
     audio: audio,
     decoder: decoder,
-    clock: clock,
-    logger: logger,
-    fileAccess: fileAccess
+    time: time,
+    logger: logger
 )
 
 // macOS Pro build with FLAC support (planned)

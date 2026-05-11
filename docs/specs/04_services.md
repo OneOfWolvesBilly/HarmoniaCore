@@ -400,7 +400,6 @@ public:
 | `MonotonicTimePort` | Required | Provides timing for position tracking |
 | `LoggerPort` | Required | Logs events for debugging |
 | `EQPort` | Required | In-chain equaliser DSP node |
-| `FileAccessPort` | Optional | Direct file access if needed |
 
 ### CueSheetService Port Dependencies
 
