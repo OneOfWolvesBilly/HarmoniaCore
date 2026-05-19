@@ -277,7 +277,7 @@ The previous `removeItem` + `moveItem` pattern silently dropped these and is no 
 
 **Tolerant `bandGains` setter:** the adapter applies `min(input.count, 10)` entries and silently ignores length mismatch.
 
-**Graph attach:** `attach(to:between:and:format:)` calls `engine.attach(eq)`, disconnects `previous`'s existing output, then connects `previous → eq → next` using the supplied `AVAudioFormat`.
+**Graph attach:** `attach(to:between:and:format:)` is a concrete method on `AVAudioUnitEQAdapter` (not part of the `EQPort` protocol). It calls `engine.attach(eq)`, disconnects `previous`'s existing output, then connects `previous → eq → next` using the supplied `AVAudioFormat`. The audio-output adapter (`AVAudioEngineOutputAdapter`) holds a typed reference to `AVAudioUnitEQAdapter?` and invokes this method during `configure(...)`.
 
 ---
 

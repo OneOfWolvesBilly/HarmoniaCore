@@ -216,7 +216,9 @@ protocol AudioOutputPort {
 
 ## EQPort
 
-Provides an in-chain equaliser DSP node that sits between the decoder and the audio output. Exposes a runtime control surface (enable / preamp / per-band gain) and a one-shot graph-attach call.
+Provides the runtime control surface for an in-chain equaliser DSP node: enable / preamp / per-band gain. The Port is platform-agnostic and exposes no audio-engine types.
+
+Graph wiring — attaching the EQ DSP node into a concrete audio engine and splicing it into the signal chain — is the responsibility of the platform adapter that owns the engine (see `02_01_apple.adapters.md` §2.11), not of the Port. Treating wiring as an adapter-to-adapter concern keeps EQPort free of platform-specific handles and matches the hexagonal boundary: the Port describes "what the EQ can do", the adapters describe "how it is wired into a specific engine".
 
 ### Interface
 
@@ -225,11 +227,6 @@ protocol EQPort {
     var isEnabled: Bool { get set }
     var preamp: Float { get set }
     var bandGains: [Float] { get set }
-
-    attach(engine: AudioEngineHandle,
-           previous: AudioNodeHandle,
-           next: AudioNodeHandle,
-           format: AudioFormat?) throws
 }
 ```
 
@@ -250,23 +247,6 @@ protocol EQPort {
 - Range: `±12 dB` per band. Implementations MUST clamp out-of-range writes.
 - Default value: all bands at `0` (flat).
 - Implementations SHOULD tolerate length mismatch on write by applying the prefix that fits and ignoring missing or surplus entries.
-
-**attach(engine, previous, next, format)**
-- Attaches the EQ DSP node to the platform audio engine and inserts it into the audio chain between `previous` and `next`.
-- The implementation is responsible for the full segment wiring: `previous → eq` AND `eq → next`. Any pre-existing `previous → next` connection MUST be replaced.
-- Called once before audio flows through the chain.
-- Thread Safety: MUST be called on main thread; concurrent calls are undefined.
-- Throws an implementation-defined error if attachment fails.
-
-### Platform Type Mapping
-
-The `attach` parameters are platform-neutral handles. Concrete platform mappings are defined in adapter specifications:
-
-| Platform-neutral type | Apple (AVFoundation) | Linux (PipeWire/Native) |
-|---|---|---|
-| `AudioEngineHandle` | `AVAudioEngine` | (TBD) |
-| `AudioNodeHandle` | `AVAudioNode` | (TBD) |
-| `AudioFormat` | `AVAudioFormat` | (TBD) |
 
 ---
 
