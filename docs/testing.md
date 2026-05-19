@@ -75,7 +75,7 @@ swift test --parallel
 
 ## Test Coverage
 
-### Current Implementation (v0.1)
+### Current Implementation
 
 | Component | Test File | Coverage | Tests | Status |
 |-----------|-----------|----------|-------|--------|
@@ -372,19 +372,19 @@ jobs:
 
 ### Planned Test Additions
 
-1. **Integration Tests** (v0.2)
+1. **Integration Tests** (planned)
    - Real file playback with test audio files
    - Cross-adapter compatibility
 
-2. **Performance Tests** (v0.2)
+2. **Performance Tests** (planned)
    - Decode speed benchmarks
    - Memory usage profiling
 
-3. **Platform-Specific Tests** (v0.2)
+3. **Platform-Specific Tests** (planned)
    - iOS sandbox behavior
    - macOS security-scoped bookmarks
 
-4. **Cross-Platform Parity** (v0.2)
+4. **Cross-Platform Parity** (planned)
    - Swift vs C++20 behavior verification
    - Identical output validation
 

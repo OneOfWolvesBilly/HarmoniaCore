@@ -146,10 +146,22 @@ For the full file listing of any sub-directory, see the corresponding specificat
 
 ## Roadmap
 
-- **v0.1** — Swift reference supporting HarmoniaPlayer Free (In development)
-- **v0.2** — Swift extensions for HarmoniaPlayer Pro (In development)
-- **v0.3+** — Advanced audio features (Planned)
-- **Linux C++20 parity** — Cross-platform implementation (Deferred)
+HarmoniaCore versioning is independent of any consumer application's release cadence. See [Versioning Policy](#versioning-policy) below.
+
+- **v0.1.x** — Swift reference, first stable API surface (current). PlaybackService, EQ, TagReader/Writer, and the full Apple adapter set.
+- **Minor bumps (0.2, 0.3, …)** — Triggered by additions to HarmoniaCore itself: new ports, new adapters, new services, or new models.
+- **Major bump (1.0)** — Cut when the API surface is judged ready for long-term backward-compatibility guarantees.
+- **Linux C++20 parity** — Cross-platform implementation (Deferred).
+
+### Versioning Policy
+
+HarmoniaCore follows its own versioning, decoupled from any consumer:
+
+- **patch** — non-API bug fixes and doc corrections
+- **minor** — additive API changes (new port / adapter / service / model)
+- **major** — breaking API changes
+
+Consumer applications and their feature tiers do not trigger HarmoniaCore version bumps.
 
 ## Contributing
 
