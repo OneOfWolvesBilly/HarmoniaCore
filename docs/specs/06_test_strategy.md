@@ -26,20 +26,20 @@ HarmoniaCore ensures cross-platform behavior parity between Swift (Apple) and C+
           /____________________\
 ```
 
-**Focus by Version**:
-- **v0.1**: Unit tests (Models, Services)
-- **v0.2**: Integration tests (Adapters with real I/O)
-- **v0.3**: E2E tests (Complete user scenarios)
+**Current focus**:
+- **Unit tests** — Models and Services with mock ports (in place)
+- **Integration tests** — Adapters with real I/O (planned)
+- **E2E tests** — Complete playback scenarios (planned)
 
 ---
 
 ## Coverage Goals
 
-| Component | Target | Swift v0.1 | C++20 v0.2 |
+| Component | Target | Swift (current) | C++20 (planned) |
 |-----------|--------|------------|------------|
 | **Models** | 100% | ✅ 100% | 🎯 Planned |
 | **Services** | 85%+ | ✅ 85% | 🎯 Planned |
-| **Adapters** | 70%+ | 🔜 v0.2 | 🎯 Planned |
+| **Adapters** | 70%+ | 🔜 Planned | 🎯 Planned |
 | **Overall** | 70%+ | 50% | 🎯 Planned |
 
 ---
@@ -59,7 +59,7 @@ HarmoniaCore ensures cross-platform behavior parity between Swift (Apple) and C+
 - Concurrent access safety
 - Business logic correctness
 
-### 3. Adapters (v0.2+)
+### 3. Adapters (planned)
 - Platform API integration
 - Real file I/O operations
 - Audio hardware interaction
@@ -102,7 +102,7 @@ Verify thread safety:
 
 ---
 
-## Cross-Platform Parity (v0.2+)
+## Cross-Platform Parity (planned)
 
 Swift and C++20 implementations **must produce identical observable behavior**:
 
@@ -137,7 +137,7 @@ All implementations must meet these thresholds before merge:
 
 **Behavioral Quality**:
 - ✅ Test vectors pass (cross-platform parity)
-- ✅ Integration tests pass (v0.2+)
+- ✅ Integration tests pass (when adapter-level coverage is in place)
 - ✅ Performance benchmarks within tolerance
 
 ---
@@ -164,13 +164,13 @@ All implementations must meet these thresholds before merge:
 
 ## Future Testing Roadmap
 
-### v0.2: Integration Tests
+### Integration Tests (planned)
 - Real audio file decoding
 - Actual audio output verification
 - Cross-platform behavior validation
 - CC0 test corpus creation
 
-### v0.3: E2E Tests
+### E2E Tests (planned)
 - Complete playback scenarios
 - Playlist handling
 - Error recovery flows

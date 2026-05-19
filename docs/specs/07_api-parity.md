@@ -445,7 +445,7 @@ If a vector cannot be implemented on one platform:
 
 ## 10. Future Extensions
 
-### Planned Categories (v0.3+)
+### Planned Categories
 
 - **Gapless Playback**: Frame-accurate transitions
 - **Real-time Effects**: EQ parameter application

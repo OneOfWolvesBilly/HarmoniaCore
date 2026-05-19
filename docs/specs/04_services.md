@@ -23,8 +23,8 @@ Code samples are illustrative only.
    FFmpeg, PipeWire, TagLib, or any other platform-specific API.
 
 3. **Minimal stable API surface**  
-   Only core functionality is specified here (v0.1).
-   Additional services will be specified in separate documents.
+   Only the currently stable core functionality is specified here.
+   Additional services will be specified in separate documents as they are introduced.
 
 4. **Verifiable behavior**  
    Implementations MUST be testable via shared cross-platform test suites that
