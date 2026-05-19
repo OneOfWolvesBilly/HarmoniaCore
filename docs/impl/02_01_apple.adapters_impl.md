@@ -499,7 +499,7 @@ See `specs/02_01_apple.adapters.md` §2.10 for the complete `TagBundle` → `AVM
 **Rationale:**
 
 - **Passthrough export** preserves the original audio stream verbatim; no re-encoding of PCM data.
-- **Atomic replacement** (not `removeItem` + `moveItem`) preserves xattr such as `com.apple.metadata:kMDItemWhereFroms` and the original creation date. Pre-Slice-9-B versions lost these; see Slice 9-B commit history.
+- **Atomic replacement** (not `removeItem` + `moveItem`) preserves xattr such as `com.apple.metadata:kMDItemWhereFroms` and the original creation date. Earlier implementations using `removeItem` + `moveItem` lost these.
 - **ReplayGain skip, not error:** callers can round-trip `TagBundle` through read → write without special-casing these two fields.
 - **FLAC / DSF / DFF refusal:** AVFoundation cannot write these container formats; a future `TagLibTagWriterAdapter` will cover them.
 
