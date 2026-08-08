@@ -40,8 +40,8 @@ Each Port specification contains:
 
 ### Adapter Notes (Non-normative)
 - Implementation guidance is provided in separate adapter implementation documents:
-  - Apple adapters: `docs/impl/02_01_apple_adapters_impl.md`
-  - Linux adapters: `docs/impl/02_02_linux_adapters_impl.md`
+  - Apple adapters: `docs/impl/02_01_apple.adapters_impl.md`
+  - Linux adapters: `docs/impl/02_02_linux.adapters_impl.md`
 
 ---
 
@@ -128,6 +128,8 @@ protocol DecoderPort {
 - Opens audio file at `url` and prepares for decoding.
 - Returns opaque `DecodeHandle` on success.
 - Throws `CoreError.notFound` if file does not exist.
+  (Known deviation: `AVAssetReaderDecoderAdapter` currently propagates raw platform
+  errors for missing files instead — see `02_01_apple.adapters.md` §2.5 Error Handling.)
 - Throws `CoreError.unsupported` if file format or codec is not supported.
 - Throws `CoreError.decodeError` if file is corrupted or invalid.
 - Thread Safety: Safe to call concurrently for different files.
@@ -185,7 +187,9 @@ protocol AudioOutputPort {
 
 **configure(sampleRate, channels, framesPerBuffer)**
 - Configures audio output parameters. MUST be called before `start()`.
-- Thread Safety: MUST be called on main thread.
+- Thread Safety: MAY be called from any thread, but MUST NOT be called from the
+  real-time render path; callers MUST serialize it against `start()`/`stop()`/`render()`
+  (`DefaultPlaybackService` serializes all port calls internally).
 
 **start()**
 - Starts audio output.
@@ -280,6 +284,10 @@ Implementations SHOULD support:
 - **Vorbis Comments** (FLAC, Ogg Vorbis, Opus)
 - **MP4 metadata** (M4A, AAC)
 - **APEv2 tags** (APE, some MP3)
+
+Current Apple implementation (`AVMetadataTagReaderAdapter`) covers ID3 and MP4/iTunes
+metadata only; Vorbis Comments and APEv2 are not readable through AVFoundation and
+await a TagLib-based adapter.
 
 ---
 

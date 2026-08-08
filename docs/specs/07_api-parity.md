@@ -463,8 +463,8 @@ When adding new categories:
 
 ## 11. References
 
-- Test Vectors: `tests/vectors/README.md`
-- Vector Schema: `tests/vectors/schema.md`
-- Parity Gate: `docs/impl/parity_gate.md`
-- Swift Implementation: `docs/impl/02_01_apple_adapters_impl.md`
-- C++20 Implementation: `docs/impl/02_02_linux_adapters_impl.md`
+- Test Vectors: `tests/vectors/README.md` *(planned — not yet authored)*
+- Vector Schema: `tests/vectors/schema.md` *(planned — not yet authored)*
+- Parity Gate: `docs/impl/parity_gate.md` *(planned — not yet authored)*
+- Swift Implementation: `docs/impl/02_01_apple.adapters_impl.md`
+- C++20 Implementation: `docs/impl/02_02_linux.adapters_impl.md`

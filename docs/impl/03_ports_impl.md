@@ -254,6 +254,39 @@ do {
 
 ---
 
+## Swift: EQPort
+
+```swift
+/// Abstract pluggable EQ node exposing the runtime control surface
+/// (enable, preamp, per-band gain) consumed by PlaybackService implementations.
+public protocol EQPort: AnyObject {
+    var isEnabled: Bool { get set }
+    var preamp: Float { get set }
+    var bandGains: [Float] { get set }
+}
+```
+
+**Key Features:**
+- Property-based control surface; no methods
+- Graph wiring (attaching the EQ DSP node into a concrete engine) is the
+  responsibility of the platform adapter that owns the audio graph —
+  `AVAudioUnitEQAdapter` exposes a non-protocol `attach(to:between:and:format:)`
+  for `AVAudioEngineOutputAdapter` to call during `configure()`
+- Range limits (e.g. ±12 dB) are enforced by the adapter, not the protocol
+
+**Usage:**
+```swift
+let eq: EQPort = AVAudioUnitEQAdapter()
+
+eq.isEnabled = true
+eq.preamp = 3.0
+eq.bandGains = [2.0, 1.5, 0.0, -1.0, 0.0, 0.0, 1.0, 2.0, 2.5, 3.0]
+```
+
+*(C++20 equivalent: deferred with the Linux adapter stack.)*
+
+---
+
 ## C++20: LoggerPort
 
 ```cpp
@@ -457,6 +490,7 @@ tag_writer->write("/path/to/audio.mp3", tags);
 | **AudioOutputPort** | `protocol AudioOutputPort: AnyObject` | `class AudioOutputPort` | Audio playback |
 | **TagReaderPort** | `protocol TagReaderPort: AnyObject` | `class TagReaderPort` | Read metadata |
 | **TagWriterPort** | `protocol TagWriterPort: AnyObject` | `class TagWriterPort` | Write metadata |
+| **EQPort** | `protocol EQPort: AnyObject` | *(deferred)* | Equalizer control surface |
 
 ---
 

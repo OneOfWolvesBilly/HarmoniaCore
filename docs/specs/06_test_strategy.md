@@ -116,7 +116,7 @@ Swift and C++20 implementations **must produce identical observable behavior**:
 
 Parity is verified through **test vectors** (JSON-based behavioral specifications).
 
-See [`docs/specs/api-parity.md`](specs/api-parity.md) for detailed requirements.
+See [`docs/specs/07_api-parity.md`](07_api-parity.md) for detailed requirements.
 
 ---
 
@@ -181,9 +181,9 @@ All implementations must meet these thresholds before merge:
 ## Implementation Guides
 
 **Platform-specific testing details**:
-- Swift: [`docs/impl/testing_swift.md`](impl/testing_swift.md)
-- C++20: [`docs/impl/testing_cpp.md`](impl/testing_cpp.md)
+- Swift: [`docs/impl/06_01_testing_swift.md`](../impl/06_01_testing_swift.md)
+- C++20: [`docs/impl/06_02_testing_cpp.md`](../impl/06_02_testing_cpp.md)
 
 **Cross-platform parity**:
-- Behavior contracts: [`docs/specs/api-parity.md`](specs/api-parity.md)
-- Test vectors: [`docs/specs/vectors/`](specs/vectors/)
+- Behavior contracts: [`docs/specs/07_api-parity.md`](07_api-parity.md)
+- Test vectors: `docs/specs/vectors/` *(planned — not yet authored)*

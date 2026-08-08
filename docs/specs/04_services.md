@@ -100,8 +100,14 @@ The following members are REQUIRED for `PlaybackService`:
 7. `duration() -> Double`
 8. `state: PlaybackState` (read-only)
 9. `setVolume(volume: Float)`
-10. `setPlaybackRange(start: Double, end: Double?)`
-11. `clearPlaybackRange()`
+10. `setEQEnabled(enabled: Bool)`
+11. `setEQPreamp(preamp: Float)`
+12. `setEQBandGains(gains: [Float])`
+
+Planned members (specified in §4.2.5, not yet implemented):
+
+- `setPlaybackRange(start: Double, end: Double?)`
+- `clearPlaybackRange()`
 
 ---
 
@@ -109,7 +115,6 @@ The following members are REQUIRED for `PlaybackService`:
 
 - Prepares audio output and sets `state = paused`.
 - Resets `currentTime()` to `0`.
-- Resets any active playback range set by `setPlaybackRange()`.
 - Initializes `duration()` from `StreamInfo`.
 
 **Error Cases:**
@@ -187,7 +192,103 @@ The following members are REQUIRED for `PlaybackService`:
 
 ---
 
-#### 4.2.2.10 `setPlaybackRange(start: Double, end: Double?)`
+#### 4.2.2.10 `setEQEnabled(enabled: Bool)`
+
+- Enables or bypasses the equalizer by forwarding to the injected `EQPort.isEnabled`.
+- Safe to call in any state, including `stopped`.
+- Thread Safety: MAY be called from any thread.
+
+---
+
+#### 4.2.2.11 `setEQPreamp(preamp: Float)`
+
+- Sets the EQ pre-amplification gain in dB by forwarding to the injected `EQPort.preamp`.
+- Range limits are enforced by the `EQPort` implementation (±12 dB for `AVAudioUnitEQAdapter`).
+- Safe to call in any state, including `stopped`.
+- Thread Safety: MAY be called from any thread.
+
+---
+
+#### 4.2.2.12 `setEQBandGains(gains: [Float])`
+
+- Sets per-band EQ gains in dB by forwarding to the injected `EQPort.bandGains`.
+- Count and range tolerance are defined by the `EQPort` implementation
+  (10 bands, ±12 dB clamp, extra entries ignored for `AVAudioUnitEQAdapter`).
+- Safe to call in any state, including `stopped`.
+- Thread Safety: MAY be called from any thread.
+
+---
+
+### 4.2.3 Buffer Size
+
+Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
+sample rate, targeting approximately 100ms of audio per buffer, rounded to the
+nearest power of two.
+
+Examples:
+- 44100 Hz → 4096 frames (~93ms)
+- 48000 Hz → 4096 frames (~85ms)
+- 96000 Hz → 8192 frames (~85ms)
+
+---
+
+### 4.2.4 Reference Interface Shapes
+
+**Swift example:**
+
+```swift
+public protocol PlaybackService: AnyObject {
+    func load(url: URL) throws
+    func play() throws
+    func pause()
+    func stop()
+    func seek(to seconds: Double) throws
+
+    func currentTime() -> Double
+    func duration() -> Double
+    var state: PlaybackState { get }
+
+    func setVolume(_ volume: Float)
+    func setEQEnabled(_ enabled: Bool)
+    func setEQPreamp(_ preamp: Float)
+    func setEQBandGains(_ gains: [Float])
+}
+```
+
+**C++ example:**
+
+```cpp
+class PlaybackService {
+public:
+    virtual ~PlaybackService() = default;
+
+    virtual void load(const std::string& url) = 0;
+    virtual void play() = 0;
+    virtual void pause() = 0;
+    virtual void stop() = 0;
+    virtual void seek(double seconds) = 0;
+
+    virtual double currentTime() const = 0;
+    virtual double duration() const = 0;
+    virtual PlaybackState state() const = 0;
+
+    virtual void setVolume(float volume) = 0;
+    virtual void setEQEnabled(bool enabled) = 0;
+    virtual void setEQPreamp(float preamp) = 0;
+    virtual void setEQBandGains(const std::vector<float>& gains) = 0;
+};
+```
+
+---
+
+### 4.2.5 Planned API — Playback Range
+
+> **Status: Planned**  
+> `setPlaybackRange` / `clearPlaybackRange` are not implemented in `apple-swift`.
+> This section describes the intended contract for a future implementation
+> (needed by CUE-sheet virtual tracks; see §4.3).
+
+#### `setPlaybackRange(start: Double, end: Double?)`
 
 Sets a time-bounded playback region. When active, playback is confined to
 `[start, end]` within the loaded file.
@@ -223,74 +324,12 @@ func setPlaybackRange(start: Double, end: Double?) throws
 virtual void setPlaybackRange(double start, std::optional<double> end) = 0;
 ```
 
----
-
-#### 4.2.2.11 `clearPlaybackRange()`
+#### `clearPlaybackRange()`
 
 - Removes any active playback range previously set by `setPlaybackRange()`.
 - After clearing, the service plays the full file from the current position.
 - Safe to call when no range is active (no-op).
 - MUST NOT throw.
-
----
-
-### 4.2.3 Buffer Size
-
-Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
-sample rate, targeting approximately 100ms of audio per buffer, rounded to the
-nearest power of two.
-
-Examples:
-- 44100 Hz → 4096 frames (~93ms)
-- 48000 Hz → 4096 frames (~85ms)
-- 96000 Hz → 8192 frames (~85ms)
-
----
-
-### 4.2.4 Reference Interface Shapes
-
-**Swift example:**
-
-```swift
-public protocol PlaybackService: AnyObject {
-    func load(url: URL) throws
-    func play() throws
-    func pause()
-    func stop()
-    func seek(to seconds: Double) throws
-
-    func currentTime() -> Double
-    func duration() -> Double
-    var state: PlaybackState { get }
-
-    func setVolume(_ volume: Float)
-    func setPlaybackRange(start: Double, end: Double?) throws
-    func clearPlaybackRange()
-}
-```
-
-**C++ example:**
-
-```cpp
-class PlaybackService {
-public:
-    virtual ~PlaybackService() = default;
-
-    virtual void load(const std::string& url) = 0;
-    virtual void play() = 0;
-    virtual void pause() = 0;
-    virtual void stop() = 0;
-    virtual void seek(double seconds) = 0;
-
-    virtual double currentTime() const = 0;
-    virtual double duration() const = 0;
-    virtual PlaybackState state() const = 0;
-
-    virtual void setVolume(float volume) = 0;
-    virtual void setPlaybackRange(double start, std::optional<double> end) = 0;
-    virtual void clearPlaybackRange() = 0;
-};
-```
 
 ---
 
@@ -417,27 +456,32 @@ public:
 
 ## 4.5 Composition / Factory
 
-**Swift example (updated):**
+> **Note:** No `CoreFactory` type exists in `apple-swift/Sources/`; consumers compose
+> the service from adapters themselves. The example below is the reference wiring.
+> The `AVAudioUnitEQAdapter` MUST be passed to `AVAudioEngineOutputAdapter(eq:)` —
+> an output adapter constructed without it leaves the EQ node outside the signal path.
+
+**Swift example:**
 
 ```swift
-public enum CoreFactory {
-    public static func makeDefaultPlaybackService() -> PlaybackService {
+enum CoreFactory {
+    static func makeDefaultPlaybackService() -> PlaybackService {
         let logger  = OSLogAdapter(subsystem: "HarmoniaCore", category: "Playback")
-        let clock   = MonotonicTimeAdapter()
+        let time    = MonotonicTimeAdapter()
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
-        let audio   = AVAudioEngineOutputAdapter(logger: logger)
         let eq      = AVAudioUnitEQAdapter()
+        let audio   = AVAudioEngineOutputAdapter(logger: logger, eq: eq)
         return DefaultPlaybackService(
             decoder: decoder,
             audio:   audio,
-            clock:   clock,
+            time:    time,
             logger:  logger,
             eq:      eq
         )
     }
 
     // Planned: CueSheetService and NativeCueSheetAdapter are not yet implemented.
-    public static func makeDefaultCueSheetService() -> CueSheetService {
+    static func makeDefaultCueSheetService() -> CueSheetService {
         let port = NativeCueSheetAdapter()
         return DefaultCueSheetService(port: port)
     }
@@ -479,9 +523,11 @@ public enum CoreFactory {
 ```
 
 **Notes:**
-- `setPlaybackRange()` does not change state; it constrains the active playback window.
-- `seek()` respects active playback range; seeks outside the range throw `invalidArgument`.
-- `load()` always clears any active playback range.
+- EQ setters (`setEQEnabled` / `setEQPreamp` / `setEQBandGains`) do not change state;
+  they forward to the injected `EQPort` in any state.
+- Planned (§4.2.5): `setPlaybackRange()` will not change state either; it will constrain
+  the active playback window, with `seek()` outside the range throwing `invalidArgument`
+  and `load()` clearing any active range.
 
 ---
 
@@ -533,6 +579,9 @@ Each MUST follow the same principles (cross-platform, ports-driven, testable):
 ### PlaybackService Tests
 - All valid state transitions work correctly
 - Idempotent operations remain idempotent
+- EQ setters forward to the injected `EQPort`
+
+Planned (once §4.2.5 is implemented):
 - `setPlaybackRange` constrains position correctly
 - Automatic pause at range end, position resets to range start
 - `seek()` outside active range throws `invalidArgument`

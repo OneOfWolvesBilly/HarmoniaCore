@@ -149,8 +149,8 @@ Contains metadata tags extracted from or to be written to an audio file, along w
 | `sampleRate` | `Double?` | Sample rate in Hz | 44100.0 |
 | `channels` | `Int?` | Number of audio channels (1 = mono, 2 = stereo) | 2 |
 | `fileSize` | `Int?` | File size in bytes | 14_182_400 |
-| `codec` | `String?` | Container / codec name as reported by the platform decoder | "MPEG-4 AAC", "FLAC" |
-| `encoding` | `String?` | Encoder / encoding profile string when available | "LAME 3.100", "iTunes 12.13" |
+| `codec` | `String?` | Human-readable codec name derived from the audio format ID | "MP3 Layer 3", "AAC LC", "Apple Lossless (ALAC)", "PCM", "FLAC" |
+| `encoding` | `String?` | Encoding classification derived from the codec | "lossy", "lossless" |
 
 ### Schema Version
 

@@ -31,12 +31,18 @@ apple-swift/
         │   ├── MockMonotonicTimePort.swift
         │   ├── MockDecoderPort.swift
         │   ├── MockAudioOutputPort.swift
+        │   ├── MockEQPort.swift
         │   ├── MockTagReaderPort.swift
         │   └── MockTagWriterPort.swift
         ├── Models/
         │   ├── StreamInfoTests.swift
         │   ├── TagBundleTests.swift
+        │   ├── LyricsLanguageVariantTests.swift
         │   └── CoreErrorTests.swift
+        ├── Adapters/
+        │   ├── AVAudioUnitEQAdapterTests.swift
+        │   ├── AVMetadataTagReaderAdapterTests.swift
+        │   └── AVMutableTagWriterAdapterTests.swift
         └── Services/
             └── DefaultPlaybackServiceTests.swift
 ```
@@ -77,18 +83,25 @@ swift test --parallel
 
 ### Current Implementation
 
-| Component | Test File | Coverage | Tests | Status |
-|-----------|-----------|----------|-------|--------|
-| **Models** | | | | |
-| StreamInfo | StreamInfoTests.swift | 100% | 4 | ✅ Complete |
-| TagBundle | TagBundleTests.swift | 100% | 3 | ✅ Complete |
-| CoreError | CoreErrorTests.swift | 100% | 14 | ✅ Complete |
-| **Services** | | | | |
-| PlaybackService | DefaultPlaybackServiceTests.swift | ~85% | 41 | ✅ Complete |
-| **Test Infrastructure** | | | | |
-| Mock Ports | TestSupport/*.swift | - | 6 mocks | ✅ Complete |
+| Component | Test File | Tests | Status |
+|-----------|-----------|-------|--------|
+| **Models** | | | |
+| StreamInfo | StreamInfoTests.swift | 14 | ✅ Complete |
+| TagBundle | TagBundleTests.swift | 66 | ✅ Complete |
+| LyricsLanguageVariant | LyricsLanguageVariantTests.swift | 10 | ✅ Complete |
+| CoreError | CoreErrorTests.swift | 14 | ✅ Complete |
+| **Services** | | | |
+| PlaybackService | DefaultPlaybackServiceTests.swift | 27 | ✅ Complete |
+| **Adapters** | | | |
+| AVAudioUnitEQAdapter | AVAudioUnitEQAdapterTests.swift | 6 | ✅ |
+| AVMetadataTagReaderAdapter | AVMetadataTagReaderAdapterTests.swift | 2 | ⚠️ Minimal |
+| AVMutableTagWriterAdapter | AVMutableTagWriterAdapterTests.swift | 23 | ✅ Complete |
+| AVAssetReaderDecoderAdapter | *(none)* | 0 | 🔜 Planned |
+| AVAudioEngineOutputAdapter | *(none)* | 0 | 🔜 Planned |
+| **Test Infrastructure** | | | |
+| Mock Ports | TestSupport/*.swift | 6 mocks | ✅ Complete |
 
-**Total: 62 tests, 50% overall coverage**
+**Total: 162 test functions**
 
 ---
 
@@ -143,7 +156,8 @@ final class PlaybackServiceTests: XCTestCase {
     var service: PlaybackService!
     var mockDecoder: MockDecoderPort!
     var mockAudio: MockAudioOutputPort!
-    var mockClock: MockMonotonicTimePort!
+    var mockTime: MockMonotonicTimePort!
+    var mockEQ: MockEQPort!
     var mockLogger: NoopLogger!
     
     override func setUp() {
@@ -151,14 +165,16 @@ final class PlaybackServiceTests: XCTestCase {
         
         mockDecoder = MockDecoderPort()
         mockAudio = MockAudioOutputPort()
-        mockClock = MockMonotonicTimePort()
+        mockTime = MockMonotonicTimePort()
+        mockEQ = MockEQPort()
         mockLogger = NoopLogger()
         
         service = DefaultPlaybackService(
             decoder: mockDecoder,
             audio: mockAudio,
-            clock: mockClock,
-            logger: mockLogger
+            time: mockTime,
+            logger: mockLogger,
+            eq: mockEQ
         )
     }
     
@@ -392,7 +408,7 @@ jobs:
 
 ## Resources
 
-- [Test Strategy](TEST_STRATEGY.md) - Overall testing approach
+- [Test Strategy](specs/06_test_strategy.md) - Overall testing approach
 - [Swift Testing Documentation](https://developer.apple.com/documentation/xctest)
-- [Port Specifications](../specs/03_ports.md)
-- [Service Specifications](../specs/04_services.md)
+- [Port Specifications](specs/03_ports.md)
+- [Service Specifications](specs/04_services.md)

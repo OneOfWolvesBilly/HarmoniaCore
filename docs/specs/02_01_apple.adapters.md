@@ -77,17 +77,19 @@ Each adapter implements one Port interface and translates platform-specific APIs
 - Opus/Vorbis: Not natively supported by AVFoundation
 
 **Security-Scoped Resource Handling:**
-- Automatically calls `startAccessingSecurityScopedResource()` when opening files selected via user file pickers (`.fileImporter`, `NSOpenPanel`, etc.)
-- Required for macOS sandboxed applications to access user-selected files
-- Properly cleans up with `stopAccessingSecurityScopedResource()` in `close()` method
-- Handles cleanup on all error paths to prevent resource leaks
-- On iOS and non-sandboxed macOS apps, these calls have no effect but are harmless
-- **Implementation Note**: The `State` structure stores both the `URL` and a flag indicating whether the resource is being accessed
+- The adapter performs **no** security-scope handling itself: it never calls
+  `startAccessingSecurityScopedResource()` / `stopAccessingSecurityScopedResource()`.
+- Sandboxed callers are responsible for resolving bookmarks and holding security-scoped
+  access for the whole decode lifetime (`open()` through `close()`).
 
-**Error Handling:**
-- If `startAccessingSecurityScopedResource()` fails (returns `false`), logs a warning but continues
-- This allows the adapter to work in non-sandboxed environments where the call is not needed
-- Actual file access errors (e.g., permission denied) are caught and mapped to appropriate `CoreError` values
+**Error Handling (known deviation):**
+- `open(url:)` does not currently map missing-file errors to `CoreError.notFound` as
+  `03_ports.md` requires: failures from `loadTracks` / `load(.duration)` /
+  `load(.formatDescriptions)` propagate as raw platform errors (`NSError`).
+  `CoreError.notFound` is only thrown for an asset that opens but contains no audio track.
+- `DefaultPlaybackService.load()` rewraps such non-`CoreError` failures as
+  `CoreError.ioError`, so service-level consumers observe `ioError` — not `notFound` —
+  for a missing file. Aligning the adapter with the port contract is future work.
 
 ---
 

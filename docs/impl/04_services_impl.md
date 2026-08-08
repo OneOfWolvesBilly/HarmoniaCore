@@ -22,13 +22,14 @@ This document provides implementation guidance for the Service layer.
 ```swift
 import Foundation
 
-@MainActor
+// Thread safety: the real implementation is lock-guarded (NSLock), not actor-isolated.
 public final class DefaultPlaybackService: PlaybackService {
     // Dependencies (Ports)
     private let decoder: DecoderPort
     private let audio: AudioOutputPort
-    private let clock: MonotonicTimePort
+    private let time: MonotonicTimePort
     private let logger: LoggerPort
+    private let eq: EQPort
     
     // Internal state
     private var currentHandle: DecodeHandle?
@@ -40,12 +41,14 @@ public final class DefaultPlaybackService: PlaybackService {
     
     public init(decoder: DecoderPort,
                 audio: AudioOutputPort,
-                clock: MonotonicTimePort,
-                logger: LoggerPort) {
+                time: MonotonicTimePort,
+                logger: LoggerPort,
+                eq: EQPort) {
         self.decoder = decoder
         self.audio = audio
-        self.clock = clock
+        self.time = time
         self.logger = logger
+        self.eq = eq
     }
 }
 ```
@@ -98,7 +101,7 @@ extension DefaultPlaybackService {
         
         try audio.start()
         _state = .playing
-        startTime = clock.now()
+        startTime = time.now()
         
         logger.info("Playing")
         
@@ -142,7 +145,7 @@ extension DefaultPlaybackService {
     public func currentTime() -> Double {
         switch _state {
         case .playing:
-            let elapsed = clock.now() - startTime
+            let elapsed = time.now() - startTime
             return Double(elapsed) / 1_000_000_000.0 // Convert ns to seconds
         case .paused:
             // Return last known position
@@ -155,7 +158,7 @@ extension DefaultPlaybackService {
             // .buffering is used during EOF drain. The clock continues running
             // so that the playback position advances to the end of the track
             // rather than freezing before the last second.
-            let elapsed = Double(clock.now() - playbackStartTime) / 1_000_000_000.0
+            let elapsed = Double(time.now() - playbackStartTime) / 1_000_000_000.0
             return min(lastKnownPosition + elapsed, streamInfo?.duration ?? 0)
         }
     }
@@ -406,15 +409,17 @@ private:
 public enum CoreFactory {
     public static func makePlaybackService() -> PlaybackService {
         let logger = OSLogAdapter()
-        let clock = MonotonicTimeAdapter()
+        let time = MonotonicTimeAdapter()
         let decoder = AVAssetReaderDecoderAdapter(logger: logger)
-        let audio = AVAudioEngineOutputAdapter(logger: logger)
+        let eq = AVAudioUnitEQAdapter()
+        let audio = AVAudioEngineOutputAdapter(logger: logger, eq: eq)
         
         return DefaultPlaybackService(
             decoder: decoder,
             audio: audio,
-            clock: clock,
-            logger: logger
+            time: time,
+            logger: logger,
+            eq: eq
         )
     }
 }
@@ -479,8 +484,9 @@ let mockDecoder = MockDecoderPort()
 let service = DefaultPlaybackService(
     decoder: mockDecoder,
     audio: mockAudio,
-    clock: mockClock,
-    logger: NoopLogger()
+    time: mockTime,
+    logger: NoopLogger(),
+    eq: MockEQPort()
 )
 
 try service.load(url: testURL)

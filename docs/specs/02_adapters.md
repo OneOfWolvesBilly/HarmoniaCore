@@ -35,6 +35,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | `TagLibTagReaderAdapter` |
 | **TagWriterPort** | `AVMutableTagWriterAdapter`² | `TagLibTagWriterAdapter` |
 | **MonotonicTimePort** | `MonotonicTimeAdapter` | `SteadyClockAdapter` |
+| **EQPort** | `AVAudioUnitEQAdapter` | *(none yet — deferred with the Linux stack)* |
 | **LoggerPort** | `OSLogAdapter`<br>`NoopLogger` | `StdErrLogger`<br>`SpdlogAdapter` |
 
 **Notes:**
@@ -45,7 +46,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 
 ## 2.4 Apple Adapters (Spec Summary)
 
-**Platform:** macOS 12+, iOS 15+  
+**Platform:** macOS 13+, iOS 16+  
 **Base Framework:** AVFoundation  
 **Details:** [02_01_apple.adapters.md](./02_01_apple.adapters.md)
 
@@ -56,6 +57,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 - **FlacDecoderAdapter : DecoderPort** — Decodes FLAC using `libFLAC` (planned for macOS Pro).  
 - **DsdDecoderAdapter : DecoderPort** — Converts DSD to PCM using `dsd2pcm` (planned for macOS Pro).  
 - **AVAudioEngineOutputAdapter : AudioOutputPort** — Uses `AVAudioEngine` / `AVAudioPlayerNode` for playback.  
+- **AVAudioUnitEQAdapter : EQPort** — 10-band parametric EQ via `AVAudioUnitEQ`, spliced into the output adapter's signal chain. See `02_01_apple.adapters.md` §2.11.  
 - **AVMetadataTagReaderAdapter : TagReaderPort** — Maps AV metadata into `TagBundle`.  
 - **AVMutableTagWriterAdapter : TagWriterPort** — Writes ID3 / MP4 metadata on macOS via `AVAssetExportSession` passthrough; iOS throws `CoreError.unsupported`. See `02_01_apple.adapters.md` §2.10 for details.
 
