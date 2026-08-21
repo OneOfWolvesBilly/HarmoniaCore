@@ -125,8 +125,15 @@ Task.detached {
 ```swift
 /// Protocol for outputting audio to system hardware.
 public protocol AudioOutputPort: AnyObject {
+    /// Invoked when the output can no longer render until it is reconfigured.
+    ///
+    /// Set by the owner after construction; never an initializer parameter.
+    /// The port holds the closure strongly — capture the owner weakly.
+    var onInvalidated: (() -> Void)? { get set }
+
     /// Configures audio output parameters.
     /// May throw if parameters are invalid.
+    /// Rebuilds the output from scratch, discarding any previous (or invalidated) state.
     func configure(
         sampleRate: Double,
         channels: Int,
@@ -160,6 +167,20 @@ public protocol AudioOutputPort: AnyObject {
 - `render()` may be called from real-time audio thread
 - `flush()` must NOT throw; clears queued buffers, restarts player node
 - `setVolume()` clamps out-of-range values; safe to call concurrently with `render()`
+- `onInvalidated` is a stored closure property, not a throwing call: implementations set the
+  port to stopped + unconfigured and release `render()` waiters *before* invoking it, so the
+  owner's handler always sees a safe port and may call back into it re-entrantly
+
+**Wiring the callback (owner side):**
+```swift
+// In the owner's initializer — weak capture, otherwise the port retains the owner.
+audio.onInvalidated = { [weak self] in
+    self?.handleOutputInvalidated()
+}
+```
+
+The closure may be invoked on any thread the implementation chooses, so the handler must do
+its own synchronization (`DefaultPlaybackService` takes its `NSLock`).
 
 **Usage:**
 ```swift
@@ -408,6 +429,14 @@ public:
     /// Parameter range: 0.0 (silent) to 1.0 (full); out-of-range values are clamped.
     /// Must NOT throw; safe to call concurrently with render().
     virtual void set_volume(float volume) = 0;
+
+    /// Install the invalidation callback.
+    ///
+    /// C++ has no property syntax, so the Swift `onInvalidated` property is expressed as a
+    /// setter here; the contract is identical (03_ports.md, Output Invalidation).
+    /// The handler runs on an implementation-owned thread, after the stream has been
+    /// stopped, the configuration discarded, and render() waiters released.
+    virtual void set_on_invalidated(std::function<void()> handler) = 0;
 };
 ```
 
@@ -541,7 +570,7 @@ func stop()                 // ✅ Must NOT throw (spec requirement)
 | **LoggerPort** | MUST be safe to call from any thread concurrently |
 | **MonotonicTimePort** | MUST be safe to call from any thread without synchronization |
 | **DecoderPort** | Safe for different handles; undefined for same handle |
-| **AudioOutputPort** | `render()` MUST be real-time safe; others main thread only |
+| **AudioOutputPort** | `render()` MUST be real-time safe; `configure()`/`start()`/`stop()`/`flush()` MUST be internally serialized and callable from any non-real-time thread; `onInvalidated` fires on an implementation-owned thread |
 | **TagReaderPort** | MUST be safe to call from any thread concurrently |
 | **TagWriterPort** | MUST synchronize file writes if called concurrently |
 

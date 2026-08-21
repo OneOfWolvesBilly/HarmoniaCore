@@ -194,18 +194,37 @@ Uses `AVAudioEngine` and `AVAudioPlayerNode` for audio playback.
 
 **Typical Usage:**
 ```swift
-@MainActor
 public final class AVAudioEngineOutputAdapter: AudioOutputPort {
-    private let engine = AVAudioEngine()
+    // Replaceable: configure() always builds a fresh engine.
+    private var engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
-    
-    public func configure(sampleRate: Double, channels: Int, framesPerBuffer: Int) {
+
+    /// Invalidation callback (AudioOutputPort). Invoked from `invalidationQueue`.
+    public var onInvalidated: (() -> Void)?
+
+    /// Serial queue the configuration-change notification is hopped onto.
+    private let invalidationQueue = DispatchQueue(label: "...output.invalidation")
+
+    /// Observer token for AVAudioEngineConfigurationChange on the current engine.
+    private var configObserver: NSObjectProtocol?
+
+    public func configure(sampleRate: Double, channels: Int, framesPerBuffer: Int) throws {
         let format = AVAudioFormat(
             standardFormatWithSampleRate: sampleRate,
             channels: AVAudioChannelCount(channels)
         )!
+
+        // Detach the reusable nodes from the outgoing engine, then swap it out.
+        // The old engine is released here — on the caller's thread, never inside
+        // the notification handler.
+        detachNodesFromCurrentEngine()
+        removeConfigurationObserver()
+        engine = AVAudioEngine()
         engine.attach(playerNode)
+        observeConfigurationChange(of: engine)
+
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
+        // (or splice the EQ node in between — see §2.11)
     }
     
     public func start() throws {
@@ -259,6 +278,53 @@ thread pool starvation and choppy audio. The playback loop MUST run on
 
 **Thread Safety:** `configure()`, `start()`, `stop()`, and `flush()` are
 protected by an internal `NSLock`. `render()` may be called from any thread.
+
+**Invalidation handling:**
+
+```swift
+private func observeConfigurationChange(of engine: AVAudioEngine) {
+    configObserver = NotificationCenter.default.addObserver(
+        forName: .AVAudioEngineConfigurationChange,
+        object: engine,          // scoped: ignore other engines in the host app
+        queue: nil
+    ) { [weak self] _ in
+        // Do nothing inline. AVFoundation posts on an unspecified thread and
+        // forbids deallocating the engine inside this handler.
+        self?.invalidationQueue.async { self?.handleInvalidation() }
+    }
+}
+
+private func handleInvalidation() {
+    lock.lock()
+    guard isConfigured || isStarted else { lock.unlock(); return }  // coalesce
+    playerNode.stop()
+    isStarted = false
+    isConfigured = false
+    let semaphore = bufferSemaphore
+    let callback = onInvalidated
+    lock.unlock()
+
+    // Release any thread blocked in render(); it re-checks isStarted and returns 0.
+    for _ in 0..<Self.maxInFlight { semaphore.signal() }
+
+    // Invoked with no lock held, so the handler may call stop()/configure() re-entrantly.
+    callback?()
+}
+```
+
+The engine itself is *not* torn down here — only stopped and marked unusable. Replacing it is
+deferred to the next `configure(...)`, which runs on the caller's thread. `deinit` removes the
+observer.
+
+**Why `configure()` rebuilds unconditionally:** a default-output-device change can leave the
+engine reporting `isRunning == true` and still calling buffer completion handlers while no
+audio reaches any speaker, without necessarily posting a configuration-change notification.
+Rebuilding every time removes the need to tell invalidation kinds apart. See
+`02_01_apple.adapters.md` §2.8.
+
+**Volume after rebuild:** `mainMixerNode` belongs to the engine, so the rebuilt engine starts at
+the default output volume; the service re-applies its remembered volume after every
+`configure(...)`.
 
 ---
 

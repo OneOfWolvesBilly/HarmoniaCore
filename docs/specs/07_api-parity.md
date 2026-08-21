@@ -30,7 +30,7 @@ All cross-platform behavior falls into these categories:
 
 | Category | What is Tested | Tolerance |
 |----------|----------------|-----------|
-| **State Transitions** | Service state changes from operations | Exact match |
+| **State Transitions** | Service state changes from operations, including output invalidation | Exact match |
 | **Error Mapping** | Platform errors → CoreError categories | Exact match |
 | **Seek Semantics** | Position changes from seek operations | ±1ms |
 | **Metadata Round-trip** | TagBundle preservation through write/read | Exact (excludes artwork) |
@@ -55,6 +55,8 @@ stopped + load(valid_url) → paused
 paused + play() → playing
 playing + pause() → paused
 stopped + play() → error(invalidState)
+playing + output_invalidate → paused          (position preserved)
+paused-after-invalidation + play() → playing  (resumes from preserved position)
 ```
 
 **Assertion Method**:
@@ -71,6 +73,10 @@ assert_state_transition(
 - State names must match exactly
 - Error categories must match exactly
 - Transition sequence must be identical
+- Output invalidation must be observable as a state transition, not as an error: every
+  platform leaves `playing` for `paused` with the position preserved, and the next `play()`
+  resumes from that position without any extra call from the application
+  (`04_services.md` §4.2.3). An implementation that stays in `playing` fails parity.
 
 ---
 
@@ -259,6 +265,7 @@ Test vectors are JSON files containing sequences of operations and assertions.
 | `pause` | - | Pause playback |
 | `stop` | - | Stop playback |
 | `seek` | `{to: seconds}` | Seek to position |
+| `output_invalidate` | - | Make the audio output report invalidation (simulates engine reset, output-device change, or audio-server disconnection) |
 
 ### 5.3 Assertion Types
 

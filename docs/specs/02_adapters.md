@@ -56,7 +56,9 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 - **AVAssetReaderDecoderAdapter : DecoderPort** — Decodes via `AVAssetReader` to interleaved Float32 PCM.  
 - **FlacDecoderAdapter : DecoderPort** — Decodes FLAC using `libFLAC` (planned for macOS Pro).  
 - **DsdDecoderAdapter : DecoderPort** — Converts DSD to PCM using `dsd2pcm` (planned for macOS Pro).  
-- **AVAudioEngineOutputAdapter : AudioOutputPort** — Uses `AVAudioEngine` / `AVAudioPlayerNode` for playback.  
+- **AVAudioEngineOutputAdapter : AudioOutputPort** — Uses `AVAudioEngine` / `AVAudioPlayerNode` for playback;
+  rebuilds the engine on every `configure(...)` and reports engine invalidation via `onInvalidated`.
+  See `02_01_apple.adapters.md` §2.8.
 - **AVAudioUnitEQAdapter : EQPort** — 10-band parametric EQ via `AVAudioUnitEQ`, spliced into the output adapter's signal chain. See `02_01_apple.adapters.md` §2.11.  
 - **AVMetadataTagReaderAdapter : TagReaderPort** — Maps AV metadata into `TagBundle`.  
 - **AVMutableTagWriterAdapter : TagWriterPort** — Writes ID3 / MP4 metadata on macOS via `AVAssetExportSession` passthrough; iOS throws `CoreError.unsupported`. See `02_01_apple.adapters.md` §2.10 for details.
@@ -89,7 +91,8 @@ The Apple implementation uses the following decoder selection strategy:
 - **SteadyClockAdapter : MonotonicTimePort** — Uses `std::chrono::steady_clock`.  
 - **FFmpegDecoderAdapter : DecoderPort** — Uses libavformat/libavcodec for decoding.  
 - **LibSndFileDecoderAdapter : DecoderPort** — Uses libsndfile for uncompressed formats.  
-- **PipeWireOutputAdapter : AudioOutputPort** — Streams PCM to system audio device via PipeWire/ALSA.  
+- **PipeWireOutputAdapter : AudioOutputPort** — Streams PCM to system audio device via PipeWire/ALSA;
+  reports stream/device loss via `onInvalidated`. See `02_02_linux.adapters.md` §2.7.
 - **TagLibTagReaderAdapter : TagReaderPort** — Reads metadata using TagLib.  
 - **TagLibTagWriterAdapter : TagWriterPort** — Writes metadata using TagLib.
 

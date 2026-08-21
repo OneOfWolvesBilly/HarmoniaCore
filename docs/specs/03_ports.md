@@ -174,6 +174,8 @@ Outputs interleaved Float32 PCM to system audio hardware.
 
 ```text
 protocol AudioOutputPort {
+    var onInvalidated: (() -> Void)? { get set }
+
     configure(sampleRate: Double, channels: Int, framesPerBuffer: Int)
     start() throws
     stop()
@@ -187,13 +189,22 @@ protocol AudioOutputPort {
 
 **configure(sampleRate, channels, framesPerBuffer)**
 - Configures audio output parameters. MUST be called before `start()`.
+- MUST establish a complete, usable output from scratch. Any resources left over from a
+  previous configuration — including an invalidated one, see [Output Invalidation](#output-invalidation) —
+  MUST be discarded and rebuilt rather than reused, and implementations MUST NOT assume the
+  device selected by a previous `configure(...)` is still the device the system will use.
+- A successful `configure(...)` clears the invalidated state: `start()` succeeds again and a
+  further invalidation MAY be reported.
+- Settings that belong to the rebuilt resources (notably the value passed to `setVolume`) MAY
+  be reset to implementation defaults; callers MUST re-apply them after `configure(...)`.
 - Thread Safety: MAY be called from any thread, but MUST NOT be called from the
   real-time render path; callers MUST serialize it against `start()`/`stop()`/`render()`
   (`DefaultPlaybackService` serializes all port calls internally).
 
 **start()**
 - Starts audio output.
-- Throws `CoreError.invalidState` if not configured.
+- Throws `CoreError.invalidState` if not configured, including when the port has been
+  invalidated and not reconfigured since.
 - Throws `CoreError.ioError` if audio device cannot be started.
 
 **stop()**
@@ -207,6 +218,8 @@ protocol AudioOutputPort {
 **render(interleavedFloat32, frameCount)**
 - Provides audio data to be played.
 - Returns number of frames actually consumed.
+- Returns `0` when the port is stopped or invalidated, so that a playback loop driving it
+  exits instead of spinning.
 - Throws `CoreError.invalidState` if output is not started.
 - **Real-Time Safety:** MUST NOT allocate memory, block, or acquire locks.
 
@@ -215,6 +228,43 @@ protocol AudioOutputPort {
 - Parameter range: `0.0` (silent) to `1.0` (full). Values outside this range MUST be clamped by the implementation.
 - MUST be idempotent. MUST NOT throw.
 - Thread Safety: safe to call from any thread (implementations MUST be prepared for concurrent calls with `render()`).
+
+### Output Invalidation
+
+An audio output can lose the ability to reach the speakers while the caller still believes it
+is playing: the host audio engine resets itself after a hardware configuration change, the
+default output device changes, a device is removed, or the audio server disconnects. Without a
+signal from the Port, a playback service stays in `playing` forever and renders into nothing.
+
+`onInvalidated` is that signal. It reports a condition, not an error: it is not delivered
+through `CoreError`, and neither `stop()` nor `render()` starts throwing because of it.
+
+**onInvalidated**
+- Owner-supplied callback. Unset by default; the owner (normally a service) assigns it after
+  construction. It is NOT an initializer parameter.
+- Implementations MUST invoke it when they detect that a configured output can no longer
+  render until it is reconfigured.
+- Before invoking it, the implementation MUST have completed its own invalidation sequence:
+  1. output stopped — subsequent `render()` calls return `0`;
+  2. configuration discarded — `start()` throws `CoreError.invalidState` until
+     `configure(...)` is called again;
+  3. every thread blocked inside `render()` released.
+  The callback therefore always observes an already-safe Port.
+- Implementations MUST invoke it without holding any internal lock, and MUST tolerate the
+  callback re-entrantly calling `stop()`, `configure(...)`, `start()` and `setVolume(...)`.
+- It MUST NOT be invoked from a real-time audio thread, and MUST NOT be invoked synchronously
+  from inside another Port method called by the owner. It MAY be invoked on any
+  implementation-owned thread; owners MUST be prepared for that.
+- **Coalescing:** while the Port is invalidated, further detections MUST NOT invoke the
+  callback again. The next invocation is only permitted after a successful `configure(...)`.
+- The Port holds the callback strongly. Owners MUST capture themselves weakly.
+- **Detection is implementation-defined.** Some invalidations are not observable as a
+  distinct event on a given platform, and some observable events are indistinguishable from
+  each other. Implementations SHOULD prefer over-reporting and unconditional rebuilding in
+  `configure(...)` over attempting to classify failure modes.
+
+Recovery is the owner's responsibility; the Port never restarts itself. The service-level
+contract built on this signal is specified in `04_services.md` §4.2.3.
 
 ---
 

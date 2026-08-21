@@ -36,6 +36,10 @@ public final class DefaultPlaybackService: PlaybackService {
     private var streamInfo: StreamInfo?
     private var _state: PlaybackState = .stopped
     private var startTime: UInt64 = 0
+
+    /// Set when the audio output reported invalidation; cleared once the output
+    /// has been reconfigured and restarted. See "Output Invalidation Recovery".
+    private var outputInvalidated = false
     
     public var state: PlaybackState { _state }
     
@@ -49,9 +53,17 @@ public final class DefaultPlaybackService: PlaybackService {
         self.time = time
         self.logger = logger
         self.eq = eq
+
+        // Weak capture: the port holds this closure strongly.
+        self.audio.onInvalidated = { [weak self] in
+            self?.handleOutputInvalidated()
+        }
     }
 }
 ```
+
+The initializer parameter list is part of the published composition contract
+(`04_services.md` §4.5): the invalidation handler is installed inside `init`, never passed in.
 
 ### State Management
 
@@ -245,6 +257,57 @@ extension DefaultPlaybackService {
     }
 }
 ```
+
+### Output Invalidation Recovery
+
+Spec: [`specs/04_services.md`](../specs/04_services.md) §4.2.3.
+
+```swift
+extension DefaultPlaybackService {
+
+    /// Called by AudioOutputPort on an implementation-owned thread, with no port
+    /// lock held. The port is already stopped and unconfigured at this point.
+    private func handleOutputInvalidated() {
+        lock.withLock {
+            outputInvalidated = true
+
+            guard _state == .playing else { return }
+
+            // Freeze the position *before* leaving .playing — calculateCurrentPosition()
+            // returns lastKnownPosition once the state is .paused.
+            lastKnownPosition = calculateCurrentPosition()
+            audio.stop()
+            _state = .paused
+        }
+    }
+
+    // Inside play(), before `try audio.start()`:
+    private func reconfigureOutputIfInvalidated() throws {
+        guard outputInvalidated, let info = streamInfo, let handle = currentHandle else { return }
+
+        try audio.configure(sampleRate: info.sampleRate,
+                            channels: info.channels,
+                            framesPerBuffer: framesPerBuffer)
+        audio.setVolume(currentVolume)
+
+        // The decode loop kept pulling frames while the dead output discarded them,
+        // so the decoder is ahead of the position the user saw.
+        try decoder.seek(handle, toSeconds: lastKnownPosition)
+    }
+}
+```
+
+**Ordering rules that matter:**
+
+- `outputInvalidated` is cleared only after `audio.start()` succeeds. A recovery that throws
+  leaves the flag set, so the next `play()` retries instead of starting a dead output.
+- `load()` clears the flag inside the locked body, right after its own successful
+  `audio.configure(...)`. An invalidation that arrives *during* `load()` blocks on the lock and
+  sets the flag again afterwards — the safe direction.
+- The playback loop needs no change: `render()` returns `0` on an invalidated port, the loop's
+  next `_state == .playing` check fails, and it exits after clearing `isPlaybackLoopRunning`.
+
+---
 
 ---
 
@@ -492,3 +555,30 @@ let service = DefaultPlaybackService(
 try service.load(url: testURL)
 XCTAssertTrue(mockDecoder.openCalled)
 ```
+
+### Simulating output invalidation
+
+`MockAudioOutputPort` exposes the `onInvalidated` property required by `AudioOutputPort` plus a
+helper that fires it, so service-level recovery is testable without any audio hardware:
+
+```swift
+public var onInvalidated: (() -> Void)?
+
+/// Fires the invalidation callback the service installed at construction time.
+public func simulateInvalidation() {
+    onInvalidated?()
+}
+```
+
+```swift
+try service.load(url: testURL)
+try service.play()
+mockAudio.simulateInvalidation()
+
+XCTAssertEqual(service.state, .paused)   // left .playing, position retained
+```
+
+The Apple adapter's own detection path (the `AVAudioEngineConfigurationChange` observer and the
+engine rebuild) needs a real audio device and a real configuration change, so it is verified
+manually rather than by unit test — see `specs/06_test_strategy.md` (adapter integration tests
+are planned, not yet in place).

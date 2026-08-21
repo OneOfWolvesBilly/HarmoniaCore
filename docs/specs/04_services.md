@@ -56,6 +56,7 @@ Normative semantics:
 [paused]  --play()--> [playing]
 [playing] --pause()--> [paused]
 [playing/paused] --stop()--> [stopped]
+[playing] --output invalidated--> [paused]  (position preserved, see §4.2.3)
 [any] --error--> [error]
 [error]  --load()--> [paused]  (recovery)
 ```
@@ -84,6 +85,8 @@ Normative semantics:
 | error | pause() | ❌ | — | Throws `invalidState` |
 | error | stop() | ✅ | stopped | Cleanup |
 | error | seek() | ❌ | — | Throws `invalidState` |
+| playing | output invalidated | ✅ | paused | Position preserved; output needs reconfiguration before the next `play()` |
+| paused / stopped / error | output invalidated | ✅ | unchanged | Recorded only; recovery deferred to the next `play()` |
 
 ---
 
@@ -104,7 +107,7 @@ The following members are REQUIRED for `PlaybackService`:
 11. `setEQPreamp(preamp: Float)`
 12. `setEQBandGains(gains: [Float])`
 
-Planned members (specified in §4.2.5, not yet implemented):
+Planned members (specified in §4.2.6, not yet implemented):
 
 - `setPlaybackRange(start: Double, end: Double?)`
 - `clearPlaybackRange()`
@@ -219,7 +222,57 @@ Planned members (specified in §4.2.5, not yet implemented):
 
 ---
 
-### 4.2.3 Buffer Size
+### 4.2.3 Output Invalidation Recovery
+
+An `AudioOutputPort` can stop being able to reach the speakers while playback is in progress
+(`03_ports.md`, *Output Invalidation*). `PlaybackService` implementations MUST NOT stay in
+`playing` when that happens.
+
+**Required behaviour**
+
+1. **Leave `playing`.** When the injected `AudioOutputPort` reports invalidation while the
+   service is `playing`, the service MUST capture the current playback position, stop the
+   output, and transition to `paused`. `currentTime()` MUST then return the captured
+   position, and `state` MUST NOT become `error`.
+2. **Resume on the next `play()`.** The following `play()` MUST resume from the captured
+   position without any additional call from the application — no reload, no explicit seek,
+   no new service instance.
+
+**Implementation requirements**
+
+- The service MUST install its handler on `AudioOutputPort.onInvalidated` at construction
+  time, capturing itself weakly (the Port holds the callback strongly).
+- Invalidation reported in any state other than `playing` MUST only be recorded: the state,
+  the position and the loaded track are left untouched.
+- The service MUST record that the output needs reconfiguration and, on the next `play()`,
+  before starting the output:
+  1. `configure(...)` the output with the loaded stream's sample rate and channel count and
+     the buffer size from §4.2.4;
+  2. re-apply the current volume (`configure(...)` may reset it — see `03_ports.md`);
+  3. seek the decoder to the retained position, because the decoder has advanced past it
+     while the invalidated output was discarding frames.
+  It then proceeds with the normal `play()` path.
+- The recovery flag MUST survive a failed recovery: if any step throws, the service enters
+  `error(...)` as it does for any other `play()` failure, and a later `play()` retries the
+  full recovery.
+- `load()` reconfigures the output as part of loading and therefore clears the flag.
+- Invalidation while `paused` still requires reconfiguration on the next `play()`; the
+  service MUST NOT assume a stopped output survived the event.
+
+**API surface**
+
+No member is added to the `PlaybackService` API for this. Recovery is internal; applications
+observe it only through `state`, `currentTime()` and an ordinary `play()` call.
+
+**Application responsibility**
+
+HarmoniaCore does not observe system-level sleep/wake or device-change events, and MUST NOT
+depend on any application framework (AppKit / UIKit) to do so. Deciding whether and when to
+call `play()` after such an event belongs to the application.
+
+---
+
+### 4.2.4 Buffer Size
 
 Implementations SHOULD calculate `framesPerBuffer` dynamically from the stream's
 sample rate, targeting approximately 100ms of audio per buffer, rounded to the
@@ -232,7 +285,7 @@ Examples:
 
 ---
 
-### 4.2.4 Reference Interface Shapes
+### 4.2.5 Reference Interface Shapes
 
 **Swift example:**
 
@@ -281,7 +334,7 @@ public:
 
 ---
 
-### 4.2.5 Planned API — Playback Range
+### 4.2.6 Planned API — Playback Range
 
 > **Status: Planned**  
 > `setPlaybackRange` / `clearPlaybackRange` are not implemented in `apple-swift`.
@@ -525,7 +578,9 @@ enum CoreFactory {
 **Notes:**
 - EQ setters (`setEQEnabled` / `setEQPreamp` / `setEQBandGains`) do not change state;
   they forward to the injected `EQPort` in any state.
-- Planned (§4.2.5): `setPlaybackRange()` will not change state either; it will constrain
+- Output invalidation (§4.2.3) drives `playing → paused` without an application call, and is
+  the only transition into `paused` that the application does not request.
+- Planned (§4.2.6): `setPlaybackRange()` will not change state either; it will constrain
   the active playback window, with `seek()` outside the range throwing `invalidArgument`
   and `load()` clearing any active range.
 
@@ -580,8 +635,13 @@ Each MUST follow the same principles (cross-platform, ports-driven, testable):
 - All valid state transitions work correctly
 - Idempotent operations remain idempotent
 - EQ setters forward to the injected `EQPort`
+- Output invalidation while `playing` transitions to `paused`, stops the output and
+  preserves the position (§4.2.3)
+- `play()` after an invalidation reconfigures the output, re-applies the volume, seeks the
+  decoder to the preserved position and returns to `playing`
+- The invalidation handler does not retain the service (no reference cycle through the Port)
 
-Planned (once §4.2.5 is implemented):
+Planned (once §4.2.6 is implemented):
 - `setPlaybackRange` constrains position correctly
 - Automatic pause at range end, position resets to range start
 - `seek()` outside active range throws `invalidArgument`

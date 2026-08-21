@@ -133,6 +133,22 @@ the adapter MUST still return nanoseconds by multiplying the value appropriately
 - Render callback MUST NOT block or wait
 - Render callback MUST NOT acquire locks (use lock-free queues)
 
+**Output Invalidation:**
+
+`AudioOutputPort` requires the adapter to report an output that can no longer render
+(`03_ports.md`, *Output Invalidation*). On Linux the triggering events are node removal,
+default-sink change, a stream error, and PipeWire/ALSA server disconnection.
+
+- The adapter MUST stop the stream, discard its configuration, release any thread blocked in
+  `render()`, and only then invoke `onInvalidated` — never from the real-time callback and
+  never while holding an internal lock.
+- The adapter MUST NOT attempt to recover by itself. `configure(...)` rebuilds the stream from
+  scratch (it MUST NOT reuse a `pw_stream` from a previous configuration), and the service
+  decides when to call it, exactly as on Apple.
+- Observable behaviour MUST match the Apple adapter: the same `playing → paused` transition
+  with the position preserved, and the same resume on the next `play()`
+  (`04_services.md` §4.2.3, `07_api-parity.md` §4.1).
+
 ---
 
 ### 2.8 TagLibTagReaderAdapter : TagReaderPort
@@ -247,6 +263,15 @@ public:
         // Return number of frames actually consumed
         return frame_count;
     }
+
+    void set_on_invalidated(std::function<void()> handler) override {
+        on_invalidated_ = std::move(handler);
+    }
+
+private:
+    std::function<void()> on_invalidated_;
+    // Invoked from the adapter's own worker thread after the stream has been
+    // stopped, the configuration discarded, and render() waiters released.
 };
 ```
 

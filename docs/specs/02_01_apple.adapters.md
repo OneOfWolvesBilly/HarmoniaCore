@@ -126,12 +126,52 @@ Each adapter implements one Port interface and translates platform-specific APIs
 - Uses `AVAudioEngine` and `AVAudioPlayerNode` for playback.  
 - Handles device sample-rate conversion and buffer scheduling.  
 - Should ensure real-time safe operations for render callbacks.
-- Typically operates on `@MainActor` for iOS/macOS UI integration.
 
 **Thread Safety:**
-- Configuration methods: Main thread only
+- `configure()`, `start()`, `stop()`, `flush()`: serialized by an internal lock; callable from
+  any thread, never from the render path
 - Render callback: Real-time safe, no allocations
 - State changes: Synchronized with audio engine state
+- `onInvalidated` is invoked on the adapter's private serial queue, never on the caller's
+  thread and never while the internal lock is held
+
+**Engine ownership:**
+
+The adapter owns a replaceable `AVAudioEngine`. `configure(...)` unconditionally discards the
+current engine and builds a new one: it detaches `AVAudioPlayerNode` and the EQ node from the
+old engine, attaches them to the new engine, wires the chain (§2.11), and re-registers the
+configuration-change observer against the new engine instance. It never reuses an engine
+across configurations.
+
+The reason is that not every invalidation is observable. When the system's default output
+device changes, an `AVAudioEngine` can keep reporting `isRunning == true` and keep firing
+buffer completion handlers while its internal aggregate device no longer reaches any speaker,
+and a configuration-change notification is not guaranteed for that case. The adapter therefore
+does not try to classify what went wrong; every `configure(...)` starts from a fresh engine.
+
+Because `mainMixerNode` belongs to the engine, a rebuilt engine starts at the default output
+volume. Callers re-apply volume after `configure(...)` (`DefaultPlaybackService` does — see
+`04_services.md` §4.2.2.1 and §4.2.3).
+
+**Invalidation detection (`onInvalidated`):**
+
+- The adapter observes `AVAudioEngineConfigurationChange` scoped to the engine instance it
+  currently owns, and removes the observation when that engine is replaced or the adapter is
+  deallocated. AVFoundation posts the notification with the engine as the notification object,
+  so scoping avoids reacting to unrelated engines owned by the host application.
+- AVFoundation stops the engine itself before posting, and posts on an unspecified thread.
+  Apple's contract additionally forbids deallocating the engine from within the notification
+  handler. The adapter therefore does no work inline: the handler hops to a private serial
+  queue, and the old engine is only released later, inside the next `configure(...)`, on the
+  caller's thread.
+- On the private queue the adapter performs the invalidation sequence required by
+  `03_ports.md`: `AVAudioPlayerNode.stop()`, mark the adapter stopped and unconfigured, signal
+  the backpressure semaphore `maxInFlight` times to release any thread blocked in `render()`,
+  release the internal lock, and only then invoke `onInvalidated`.
+- Further notifications while the adapter is already invalidated are ignored; the next
+  callback is only possible after a successful `configure(...)`.
+- `start()` on an unconfigured or invalidated adapter throws `CoreError.invalidState` rather
+  than starting a stale engine.
 
 ---
 
@@ -304,7 +344,9 @@ All AVFoundation errors MUST be mapped to `CoreError` categories:
 - **macOS Pro** builds may statically link `libFLAC` and `dsd2pcm`; license headers must be preserved.  
 - **AVFoundation** performs implicit decoding to PCM for playback; double-decoding must be avoided.  
 - All adapters MUST handle AVFoundation's asynchronous callbacks appropriately.
-- Audio engine operations (start/stop) SHOULD be called on the main thread for UI synchronization.
+- Audio engine operations (`configure` / `start` / `stop` / `flush`) are serialized by
+  `AVAudioEngineOutputAdapter`'s internal lock and are not restricted to the main thread;
+  the playback loop and the invalidation handler both call them from background queues.
 
 ---
 
@@ -315,15 +357,19 @@ import HarmoniaCore
 
 // Standard build
 let logger = OSLogAdapter()
-let audio: AudioOutputPort = AVAudioEngineOutputAdapter(logger: logger)
+let eq = AVAudioUnitEQAdapter()
+let audio: AudioOutputPort = AVAudioEngineOutputAdapter(logger: logger, eq: eq)
 let decoder: DecoderPort = AVAssetReaderDecoderAdapter(logger: logger)
 let time = MonotonicTimeAdapter()
 
-let svc = PlaybackService(
-    audio: audio,
+// DefaultPlaybackService installs its own AudioOutputPort.onInvalidated handler
+// during construction; consumers do not wire it up (see 04_services.md §4.2.3).
+let svc = DefaultPlaybackService(
     decoder: decoder,
+    audio: audio,
     time: time,
-    logger: logger
+    logger: logger,
+    eq: eq
 )
 
 // macOS Pro build with FLAC support (planned)
