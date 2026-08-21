@@ -132,6 +132,8 @@ Planned members (specified in §4.2.6, not yet implemented):
 - If `state` is `paused`: starts playback, sets `state = playing`.
 - If `state` is already `playing`: no-op.
 - If no track loaded: throws `CoreError.invalidState`.
+- If the audio output was invalidated since it was last configured, `play()` first restores it
+  and resumes from the retained position — see §4.2.3.
 
 ---
 
@@ -258,6 +260,22 @@ An `AudioOutputPort` can stop being able to reach the speakers while playback is
 - `load()` reconfigures the output as part of loading and therefore clears the flag.
 - Invalidation while `paused` still requires reconfiguration on the next `play()`; the
   service MUST NOT assume a stopped output survived the event.
+
+**Boundaries**
+
+- **Locking.** The handler runs on a thread owned by the Port and needs the service's own
+  synchronization to change state. It is the Port's obligation to invoke `onInvalidated`
+  with no Port lock held (`03_ports.md`) that keeps this free of lock-order inversion: the
+  service always takes its own lock before a Port lock, never the reverse.
+- **End of stream.** Invalidation and end-of-stream can arrive within the same buffer. If the
+  decoder reaches EOF before the invalidation handler acquires the service lock, the normal EOF
+  path wins and the service ends in `stopped` rather than `paused`. This is permitted: the
+  track had finished. The `playing → paused` guarantee applies to invalidation observed while
+  frames remain to be rendered.
+- **Discarded frames.** Between the invalidation and the handler taking the lock, the playback
+  loop may decode a few buffers that the invalidated output discards, so the decoder ends up
+  ahead of the retained position. The decoder seek performed during recovery is what makes
+  that harmless — it is required, not an optimisation.
 
 **API surface**
 

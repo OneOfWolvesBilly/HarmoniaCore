@@ -139,9 +139,8 @@ Each adapter implements one Port interface and translates platform-specific APIs
 
 The adapter owns a replaceable `AVAudioEngine`. `configure(...)` unconditionally discards the
 current engine and builds a new one: it detaches `AVAudioPlayerNode` and the EQ node from the
-old engine, attaches them to the new engine, wires the chain (§2.11), and re-registers the
-configuration-change observer against the new engine instance. It never reuses an engine
-across configurations.
+old engine, attaches them to the new engine, and wires the chain (§2.11). It never reuses an
+engine across configurations.
 
 The reason is that not every invalidation is observable. When the system's default output
 device changes, an `AVAudioEngine` can keep reporting `isRunning == true` and keep firing
@@ -155,10 +154,16 @@ volume. Callers re-apply volume after `configure(...)` (`DefaultPlaybackService`
 
 **Invalidation detection (`onInvalidated`):**
 
-- The adapter observes `AVAudioEngineConfigurationChange` scoped to the engine instance it
-  currently owns, and removes the observation when that engine is replaced or the adapter is
-  deallocated. AVFoundation posts the notification with the engine as the notification object,
-  so scoping avoids reacting to unrelated engines owned by the host application.
+- The adapter observes `AVAudioEngineConfigurationChange` for **all** objects and filters
+  inside the handler: a notification is treated as its own when the notification object is the
+  engine the adapter currently holds, or when the object is `nil`; a notification carrying a
+  different `AVAudioEngine` is ignored. Registering with `object: engine` would be more direct,
+  but it silently receives nothing if a future OS posts the notification without an object,
+  which would disable invalidation detection entirely. Filtering costs one identity comparison
+  and fails safe in both directions: it neither misses the adapter's own engine nor reacts to
+  another engine owned by the host application. The observation is removed on `deinit`; because
+  it is not scoped to one engine instance, it does NOT need re-registering when the engine is
+  replaced.
 - AVFoundation stops the engine itself before posting, and posts on an unspecified thread.
   Apple's contract additionally forbids deallocating the engine from within the notification
   handler. The adapter therefore does no work inline: the handler hops to a private serial

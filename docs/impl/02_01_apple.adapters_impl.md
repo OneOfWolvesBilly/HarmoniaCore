@@ -205,7 +205,8 @@ public final class AVAudioEngineOutputAdapter: AudioOutputPort {
     /// Serial queue the configuration-change notification is hopped onto.
     private let invalidationQueue = DispatchQueue(label: "...output.invalidation")
 
-    /// Observer token for AVAudioEngineConfigurationChange on the current engine.
+    /// Observer token for AVAudioEngineConfigurationChange. Registered once, for all
+    /// objects; the handler filters by engine identity. Removed in deinit.
     private var configObserver: NSObjectProtocol?
 
     public func configure(sampleRate: Double, channels: Int, framesPerBuffer: Int) throws {
@@ -218,10 +219,8 @@ public final class AVAudioEngineOutputAdapter: AudioOutputPort {
         // The old engine is released here — on the caller's thread, never inside
         // the notification handler.
         detachNodesFromCurrentEngine()
-        removeConfigurationObserver()
         engine = AVAudioEngine()
         engine.attach(playerNode)
-        observeConfigurationChange(of: engine)
 
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
         // (or splice the EQ node in between — see §2.11)
@@ -282,20 +281,26 @@ protected by an internal `NSLock`. `render()` may be called from any thread.
 **Invalidation handling:**
 
 ```swift
-private func observeConfigurationChange(of engine: AVAudioEngine) {
+// Registered once, in init. object: nil, because a notification posted without an
+// object would be invisible to an engine-scoped observer and would disable
+// invalidation detection entirely; identity filtering happens below instead.
+private func observeConfigurationChange() {
     configObserver = NotificationCenter.default.addObserver(
         forName: .AVAudioEngineConfigurationChange,
-        object: engine,          // scoped: ignore other engines in the host app
+        object: nil,
         queue: nil
-    ) { [weak self] _ in
+    ) { [weak self] note in
         // Do nothing inline. AVFoundation posts on an unspecified thread and
         // forbids deallocating the engine inside this handler.
-        self?.invalidationQueue.async { self?.handleInvalidation() }
+        self?.invalidationQueue.async { self?.handleInvalidation(note.object) }
     }
 }
 
-private func handleInvalidation() {
+private func handleInvalidation(_ object: Any?) {
     lock.lock()
+    // Ours if it carries our current engine, or carries no object at all.
+    // A notification for another engine in the host app is not ours.
+    if let object, (object as AnyObject) !== engine { lock.unlock(); return }
     guard isConfigured || isStarted else { lock.unlock(); return }  // coalesce
     playerNode.stop()
     isStarted = false
@@ -315,6 +320,10 @@ private func handleInvalidation() {
 The engine itself is *not* torn down here — only stopped and marked unusable. Replacing it is
 deferred to the next `configure(...)`, which runs on the caller's thread. `deinit` removes the
 observer.
+
+Note that `render()` must keep returning `0` rather than throwing while the adapter is
+invalidated: the playback loop treats a thrown `CoreError` as a fatal playback error and puts
+the service into `error`, which would defeat the `playing → paused` contract.
 
 **Why `configure()` rebuilds unconditionally:** a default-output-device change can leave the
 engine reporting `isRunning == true` and still calling buffer completion handlers while no

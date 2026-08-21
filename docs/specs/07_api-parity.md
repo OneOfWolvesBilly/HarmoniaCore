@@ -267,6 +267,11 @@ Test vectors are JSON files containing sequences of operations and assertions.
 | `seek` | `{to: seconds}` | Seek to position |
 | `output_invalidate` | - | Make the audio output report invalidation (simulates engine reset, output-device change, or audio-server disconnection) |
 
+`output_invalidate` cannot be produced by real hardware on demand. A vector using it MUST be
+run against a test double that fires `AudioOutputPort.onInvalidated`, not against the platform
+adapter; the adapter's own detection path is verified manually. A runner that cannot supply
+such a double declares the exemption per §8.3.
+
 ### 5.3 Assertion Types
 
 | Type | Args | Description |

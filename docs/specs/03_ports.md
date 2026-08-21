@@ -218,9 +218,11 @@ protocol AudioOutputPort {
 **render(interleavedFloat32, frameCount)**
 - Provides audio data to be played.
 - Returns number of frames actually consumed.
-- Returns `0` when the port is stopped or invalidated, so that a playback loop driving it
-  exits instead of spinning.
-- Throws `CoreError.invalidState` if output is not started.
+- Returns `0` — and MUST NOT throw — when the port is stopped or invalidated, so that a
+  playback loop driving it exits instead of spinning or unwinding through an error path.
+  Being stopped or invalidated is not an error condition for `render()`.
+- Throws only on an internal failure that prevents the frames from being accepted at all
+  (for example a buffer allocation failure), mapped to `CoreError`.
 - **Real-Time Safety:** MUST NOT allocate memory, block, or acquire locks.
 
 **setVolume(volume)**
