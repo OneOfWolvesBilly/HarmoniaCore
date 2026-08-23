@@ -81,12 +81,12 @@ Normative semantics:
 | playing | stop() | ✅ | stopped | Stops and releases |
 | playing | seek() | ✅ | playing | Continues playing |
 | error | load() | ✅ | paused | Recovery path |
-| error | play() | ❌ | — | Throws `invalidState` |
+| error | play() | ❌ / ✅ | — / playing | Throws `invalidState` with no track loaded; with a track loaded (e.g. after a failed resume) retries the full rebuild — see §4.2.3 |
 | error | pause() | ❌ | — | Throws `invalidState` |
 | error | stop() | ✅ | stopped | Cleanup |
 | error | seek() | ❌ | — | Throws `invalidState` |
-| playing | output invalidated | ✅ | paused | Position preserved; output needs reconfiguration before the next `play()` |
-| paused / stopped / error | output invalidated | ✅ | unchanged | Recorded only; recovery deferred to the next `play()` |
+| playing | output invalidated | ✅ | paused | Position preserved; the next `play()` rebuilds the output (§4.2.3) |
+| paused / stopped / error | output invalidated | ✅ | unchanged | No service action needed — `play()` rebuilds the output on every start (§4.2.3) |
 
 ---
 
@@ -129,11 +129,11 @@ Planned members (specified in §4.2.6, not yet implemented):
 
 #### 4.2.2.2 `play()`
 
-- If `state` is `paused`: starts playback, sets `state = playing`.
 - If `state` is already `playing`: no-op.
 - If no track loaded: throws `CoreError.invalidState`.
-- If the audio output was invalidated since it was last configured, `play()` first restores it
-  and resumes from the retained position — see §4.2.3.
+- Otherwise: rebuilds the audio output — reconfigure, re-apply volume, seek the decoder to
+  the retained position (§4.2.3) — then starts playback and sets `state = playing`. The
+  rebuild is unconditional: it does not depend on whether an invalidation was observed.
 
 ---
 
@@ -239,27 +239,42 @@ An `AudioOutputPort` can stop being able to reach the speakers while playback is
 2. **Resume on the next `play()`.** The following `play()` MUST resume from the captured
    position without any additional call from the application — no reload, no explicit seek,
    no new service instance.
+3. **Every start rebuilds the output.** Every `play()` that actually starts playback (i.e.
+   is not the `playing` no-op) MUST, before starting the output:
+   1. `configure(...)` the output with the loaded stream's sample rate and channel count and
+      the buffer size from §4.2.4;
+   2. re-apply the current volume (`configure(...)` may reset it — see `03_ports.md`);
+   3. seek the decoder to the retained position.
+   It then proceeds with the normal start path.
+
+The rebuild is unconditional — the service keeps no "was invalidated" flag. Rationale: some
+invalidations are not observable (`03_ports.md`, *Detection is implementation-defined*); a
+recovery keyed to having observed the invalidation cannot cover them, and would leave the
+application with no way to restore output short of reloading the track and losing the
+position. With the unconditional rebuild, `pause()` followed by `play()` deterministically
+restores a working output in every failure mode, detected or not — the application's lever
+for events only it can observe (system wake, a device change it was told about).
+
+Two consequences are part of the contract:
+
+- **Resume position is exact.** Because `play()` seeks the decoder back to the retained
+  position, frames that were decoded ahead and discarded when the output stopped are not
+  skipped. `pause()` → `play()` resumes at the position `currentTime()` reported while
+  paused.
+- **A failed resume is retryable.** If any rebuild step throws, the service enters
+  `error(...)` as for any other `play()` failure — with the track still loaded and the
+  position retained. A subsequent `play()` repeats the full rebuild. For a loaded track this
+  refines the `error` row of §4.2.1: `play()` in `error` state with a track loaded retries
+  and, on success, transitions to `playing`; `play()` in `error` with no track loaded still
+  throws `invalidState`.
 
 **Implementation requirements**
 
 - The service MUST install its handler on `AudioOutputPort.onInvalidated` at construction
   time, capturing itself weakly (the Port holds the callback strongly).
-- Invalidation reported in any state other than `playing` MUST only be recorded: the state,
-  the position and the loaded track are left untouched.
-- The service MUST record that the output needs reconfiguration and, on the next `play()`,
-  before starting the output:
-  1. `configure(...)` the output with the loaded stream's sample rate and channel count and
-     the buffer size from §4.2.4;
-  2. re-apply the current volume (`configure(...)` may reset it — see `03_ports.md`);
-  3. seek the decoder to the retained position, because the decoder has advanced past it
-     while the invalidated output was discarding frames.
-  It then proceeds with the normal `play()` path.
-- The recovery flag MUST survive a failed recovery: if any step throws, the service enters
-  `error(...)` as it does for any other `play()` failure, and a later `play()` retries the
-  full recovery.
-- `load()` reconfigures the output as part of loading and therefore clears the flag.
-- Invalidation while `paused` still requires reconfiguration on the next `play()`; the
-  service MUST NOT assume a stopped output survived the event.
+- Invalidation reported in any state other than `playing` requires no service action beyond
+  what the Port has already done: the state, the position and the loaded track are left
+  untouched, and the next `play()` rebuilds regardless.
 
 **Boundaries**
 
@@ -655,8 +670,11 @@ Each MUST follow the same principles (cross-platform, ports-driven, testable):
 - EQ setters forward to the injected `EQPort`
 - Output invalidation while `playing` transitions to `paused`, stops the output and
   preserves the position (§4.2.3)
-- `play()` after an invalidation reconfigures the output, re-applies the volume, seeks the
-  decoder to the preserved position and returns to `playing`
+- Every `play()` that starts playback — after an invalidation, after a plain `pause()`, and
+  as the first `play()` after `load()` — reconfigures the output, re-applies the volume,
+  seeks the decoder to the retained position and returns to `playing` (§4.2.3)
+- After a failed resume (`configure`/`start` throws → `error`), a subsequent `play()`
+  retries the full rebuild and succeeds once the output cooperates
 - The invalidation handler does not retain the service (no reference cycle through the Port)
 
 Planned (once §4.2.6 is implemented):

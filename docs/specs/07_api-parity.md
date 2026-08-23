@@ -55,8 +55,9 @@ stopped + load(valid_url) → paused
 paused + play() → playing
 playing + pause() → paused
 stopped + play() → error(invalidState)
-playing + output_invalidate → paused          (position preserved)
-paused-after-invalidation + play() → playing  (resumes from preserved position)
+playing + output_invalidate → paused   (position preserved)
+paused + play() → playing              (rebuilds the output, resumes from the retained position
+                                        — whether the pause came from pause() or from invalidation)
 ```
 
 **Assertion Method**:

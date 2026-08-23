@@ -37,10 +37,6 @@ public final class DefaultPlaybackService: PlaybackService {
     private var _state: PlaybackState = .stopped
     private var startTime: UInt64 = 0
 
-    /// Set when the audio output reported invalidation; cleared once the output
-    /// has been reconfigured and restarted. See "Output Invalidation Recovery".
-    private var outputInvalidated = false
-    
     public var state: PlaybackState { _state }
     
     public init(decoder: DecoderPort,
@@ -269,8 +265,6 @@ extension DefaultPlaybackService {
     /// lock held. The port is already stopped and unconfigured at this point.
     private func handleOutputInvalidated() {
         lock.withLock {
-            outputInvalidated = true
-
             guard _state == .playing else { return }
 
             // Freeze the position *before* leaving .playing — calculateCurrentPosition()
@@ -281,29 +275,34 @@ extension DefaultPlaybackService {
         }
     }
 
-    // Inside play(), before `try audio.start()`:
-    private func reconfigureOutputIfInvalidated() throws {
-        guard outputInvalidated, let info = streamInfo, let handle = currentHandle else { return }
+    // Inside play(), before `try audio.start()` — on EVERY start, not behind a flag:
+    private func rebuildOutput() throws {
+        guard let info = streamInfo, let handle = currentHandle else { return }
 
         try audio.configure(sampleRate: info.sampleRate,
                             channels: info.channels,
                             framesPerBuffer: framesPerBuffer)
         audio.setVolume(currentVolume)
 
-        // The decode loop kept pulling frames while the dead output discarded them,
-        // so the decoder is ahead of the position the user saw.
+        // The decode loop is ahead of the audible position: frames it decoded were
+        // discarded when the output stopped (pause or invalidation alike). Seeking
+        // back to the retained position makes resume exact.
         try decoder.seek(handle, toSeconds: lastKnownPosition)
     }
 }
 ```
 
+There is deliberately no `outputInvalidated` flag: recovery must not depend on the
+invalidation having been observed (`04_services.md` §4.2.3). `pause()` + `play()` restores a
+working output in every failure mode, including the undetectable one.
+
 **Ordering rules that matter:**
 
-- `outputInvalidated` is cleared only after `audio.start()` succeeds. A recovery that throws
-  leaves the flag set, so the next `play()` retries instead of starting a dead output.
-- `load()` clears the flag inside the locked body, right after its own successful
-  `audio.configure(...)`. An invalidation that arrives *during* `load()` blocks on the lock and
-  sets the flag again afterwards — the safe direction.
+- `play()` transitions to `error(...)` if any rebuild step throws, with the track and
+  position retained; because the rebuild runs on every start, the next `play()` retries with
+  no extra state to reset.
+- `pause()` must update `lastKnownPosition` before calling `audio.stop()` (it already does):
+  that value is what `rebuildOutput()` seeks back to.
 - The playback loop needs no change: `render()` returns `0` on an invalidated port, the loop's
   next `_state == .playing` check fails, and it exits after clearing `isPlaybackLoopRunning`.
 
