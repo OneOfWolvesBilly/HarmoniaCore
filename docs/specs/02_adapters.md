@@ -36,10 +36,11 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 | **TagWriterPort** | `AVMutableTagWriterAdapter`² | `TagLibTagWriterAdapter` |
 | **MonotonicTimePort** | `MonotonicTimeAdapter` | `SteadyClockAdapter` |
 | **EQPort** | `AVAudioUnitEQAdapter` | *(none yet — deferred with the Linux stack)* |
+| **AudioRoutePort** | `SystemAudioRouteAdapter` | `PipeWireRouteAdapter`¹ |
 | **LoggerPort** | `OSLogAdapter`<br>`NoopLogger` | `StdErrLogger`<br>`SpdlogAdapter` |
 
 **Notes:**
-1. `FlacDecoderAdapter` and `DsdDecoderAdapter` are planned for **macOS Pro builds** (require external libraries: `libFLAC`, `dsd2pcm`)
+1. `FlacDecoderAdapter` and `DsdDecoderAdapter` are planned for **macOS Pro builds** (require external libraries: `libFLAC`, `dsd2pcm`); `PipeWireRouteAdapter` is deferred with the rest of the Linux stack
 2. `AVMutableTagWriterAdapter` writes ID3 / MP4 metadata on macOS via `AVAssetExportSession` passthrough. iOS throws `CoreError.unsupported` due to sandbox restrictions. FLAC / DSF / DFF are gated at write time — a future `TagLibTagWriterAdapter` will cover those containers.
 
 ---
@@ -53,6 +54,7 @@ Frameworks such as **AVFoundation**, **PipeWire**, and **TagLib** are external d
 - **OSLogAdapter : LoggerPort** — Forwards messages to the Unified Logging system.  
 - **NoopLogger : LoggerPort** — Discards all messages (used in tests).  
 - **MonotonicTimeAdapter : MonotonicTimePort** — Returns monotonic time in nanoseconds via `DispatchTime`.  
+- **SystemAudioRouteAdapter : AudioRoutePort** — Reads the system default output device (CoreAudio on macOS, AVAudioSession on iOS). See `02_01_apple.adapters.md` §2.12.  
 - **AVAssetReaderDecoderAdapter : DecoderPort** — Decodes via `AVAssetReader` to interleaved Float32 PCM.  
 - **FlacDecoderAdapter : DecoderPort** — Decodes FLAC using `libFLAC` (planned for macOS Pro).  
 - **DsdDecoderAdapter : DecoderPort** — Converts DSD to PCM using `dsd2pcm` (planned for macOS Pro).  
@@ -89,6 +91,7 @@ The Apple implementation uses the following decoder selection strategy:
 - **StdErrLogger : LoggerPort** — Writes messages to stderr.  
 - **SpdlogAdapter : LoggerPort** — Uses spdlog library for structured logging.  
 - **SteadyClockAdapter : MonotonicTimePort** — Uses `std::chrono::steady_clock`.  
+- **PipeWireRouteAdapter : AudioRoutePort** — Reads the current default sink via PipeWire metadata (planned). See `02_02_linux.adapters.md` §2.10.  
 - **FFmpegDecoderAdapter : DecoderPort** — Uses libavformat/libavcodec for decoding.  
 - **LibSndFileDecoderAdapter : DecoderPort** — Uses libsndfile for uncompressed formats.  
 - **PipeWireOutputAdapter : AudioOutputPort** — Streams PCM to system audio device via PipeWire/ALSA;

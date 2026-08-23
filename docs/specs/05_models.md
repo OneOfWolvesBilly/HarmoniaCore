@@ -366,6 +366,64 @@ struct LyricsLanguageVariant {
 
 ---
 
+## AudioOutputDevice
+
+Identifies the audio output device the system currently routes sound to.
+Produced by `AudioRoutePort.currentOutputDevice()` (see `03_ports.md`); consumed by the
+application layer, typically to name the destination in a resume prompt after an output
+invalidation.
+
+### Fields
+
+| Field | Type | Description | Constraints |
+|-------|------|-------------|-------------|
+| `id` | `String` | Stable, platform-defined unique identifier for the device | Non-empty. Stable across queries while the device stays connected; NOT guaranteed stable across reconnects or reboots |
+| `name` | `String` | Human-readable device name for display | Non-empty. E.g. "MacBook Pro Speakers", "AirPods Pro" |
+
+### Semantics
+
+- **id:**  
+  Whatever stable identifier the platform provides: the CoreAudio device UID on macOS, the
+  `AVAudioSessionPortDescription.uid` on iOS, the node identity on PipeWire. Opaque to
+  callers — compare for equality, never parse.
+
+- **name:**  
+  The user-facing name, passed through from the platform without normalization. Intended
+  for display; not unique (two devices may share a name).
+
+### Illustrative Shapes
+
+**Swift:**
+```swift
+public struct AudioOutputDevice: Sendable, Equatable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+```
+
+**C++:**
+```cpp
+struct AudioOutputDevice {
+    std::string id;
+    std::string name;
+
+    bool operator==(const AudioOutputDevice&) const = default;
+};
+```
+
+### Parity Requirements
+
+**Excluded from parity:** both fields name whatever hardware the host happens to have, so no
+cross-platform vector can assert their values (`07_api-parity.md` §7). Only the shape is
+shared.
+
+---
+
 ## CueTrack
 
 > **Status: Planned**  
@@ -680,7 +738,7 @@ Used by `DecoderPort` to track open decode sessions.
 ## Thread Safety Considerations
 
 ### Immutable Models
-- `StreamInfo`, `CueTrack`, `CueSheet`, `LyricsLanguageVariant` are immutable → naturally thread-safe.
+- `StreamInfo`, `CueTrack`, `CueSheet`, `LyricsLanguageVariant`, `AudioOutputDevice` are immutable → naturally thread-safe.
 - `TagBundle` fields are independent → safe to read concurrently if not mutated.
 
 ### Mutable Models

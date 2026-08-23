@@ -13,6 +13,7 @@ Apple adapters implement the common Ports using system frameworks:
 | **TagReaderPort** | `AVMetadataTagReaderAdapter` | AVFoundation | iOS / macOS | Reads ID3 / MP4 metadata. |
 | **TagWriterPort** | `AVMutableTagWriterAdapter` | AVFoundation | iOS / macOS | macOS: writes ID3 / MP4 metadata via `AVAssetExportSession` passthrough. iOS: throws `CoreError.unsupported` (sandbox). |
 | **MonotonicTimePort** | `MonotonicTimeAdapter` | Dispatch / mach | iOS / macOS | Uses `DispatchTime.now().uptimeNanoseconds`. |
+| **AudioRoutePort** | `SystemAudioRouteAdapter` | CoreAudio (macOS) / AVFAudio (iOS) | iOS / macOS | Reads the system default output device (id + name). |
 | **LoggerPort** | `OSLogAdapter` | os.log | iOS / macOS | Uses unified logging; fallback to no-op. |
 | **LoggerPort** | `NoopLogger` | N/A | iOS / macOS | Discards all messages (used in tests). |
 
@@ -325,6 +326,42 @@ The previous `removeItem` + `moveItem` pattern silently dropped these and is no 
 **Tolerant `bandGains` setter:** the adapter applies `min(input.count, 10)` entries and silently ignores length mismatch.
 
 **Graph attach:** `attach(to:between:and:format:)` is a concrete method on `AVAudioUnitEQAdapter` (not part of the `EQPort` protocol). It calls `engine.attach(eq)`, disconnects `previous`'s existing output, then connects `previous → eq → next` using the supplied `AVAudioFormat`. The audio-output adapter (`AVAudioEngineOutputAdapter`) holds a typed reference to `AVAudioUnitEQAdapter?` and invokes this method during `configure(...)`.
+
+---
+
+### 2.12 SystemAudioRouteAdapter : AudioRoutePort
+
+Reads the identity of the system's current audio output device. One adapter, two platform
+paths behind conditional compilation — no AppKit / UIKit types on either path:
+
+**macOS (CoreAudio HAL):**
+
+1. `AudioObjectGetPropertyData` on `kAudioObjectSystemObject` with
+   `kAudioHardwarePropertyDefaultOutputDevice` → `AudioDeviceID` of the default output.
+2. On that device: `kAudioDevicePropertyDeviceUID` → stable UID string → `id`.
+3. On that device: `kAudioObjectPropertyName` → display name → `name`.
+4. Any failing step, or an invalid device ID, yields `nil` for the whole call.
+
+**iOS (AVAudioSession):**
+
+1. `AVAudioSession.sharedInstance().currentRoute.outputs.first` — the primary output port.
+2. `portDescription.uid` → `id`; `portDescription.portName` → `name`.
+3. An empty `outputs` array yields `nil`.
+
+**Behaviour:**
+
+- Stateless: every call queries the platform; nothing is cached and no notification is
+  observed. Change observation is out of scope for this Port (see `03_ports.md`).
+- Never throws; all platform failures collapse to `nil`.
+- Thread-safe by statelessness. Not real-time safe — the HAL query can block; MUST NOT be
+  called from the render path.
+- Independent of `AVAudioEngineOutputAdapter`: it reports the *system* default output, which
+  is also what a rebuilt engine will attach to on the next `configure(...)` — that is what
+  makes the reading suitable for a "continue on X?" prompt before `play()`.
+
+**Verification:** the returned values name real hardware, so unit tests cannot assert them.
+The adapter is verified manually (compare against the device shown in System Settings ›
+Sound); no test double is needed because no service consumes this Port.
 
 ---
 

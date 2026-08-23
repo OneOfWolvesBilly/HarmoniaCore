@@ -344,6 +344,8 @@ TEST(VectorRunner, PlaybackStateTransitions) {
 - Artwork compression level
 - Performance metrics (CPU, memory, latency)
 - Log message text (only behavior is tested)
+- `AudioRoutePort.currentOutputDevice()` values (`AudioOutputDevice.id` / `.name` name
+  whatever hardware the host has — only the shape is shared, see `03_ports.md`)
 
 ---
 

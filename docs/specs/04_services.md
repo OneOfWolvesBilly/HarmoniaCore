@@ -303,6 +303,10 @@ HarmoniaCore does not observe system-level sleep/wake or device-change events, a
 depend on any application framework (AppKit / UIKit) to do so. Deciding whether and when to
 call `play()` after such an event belongs to the application.
 
+To name the destination in a resume prompt ("Continue on X?"), the application MAY read the
+system's current output device through `AudioRoutePort` (`03_ports.md`). That Port is
+application-facing: `PlaybackService` neither depends on it nor is affected by it (§4.4).
+
 ---
 
 ### 4.2.4 Buffer Size
@@ -525,6 +529,9 @@ public:
 | `MonotonicTimePort` | Required | Provides timing for position tracking |
 | `LoggerPort` | Required | Logs events for debugging |
 | `EQPort` | Required | In-chain equaliser DSP node |
+
+`AudioRoutePort` is deliberately absent: it serves the application layer directly
+(§4.2.3, *Application responsibility*) and is not injected into any service.
 
 ### CueSheetService Port Dependencies
 

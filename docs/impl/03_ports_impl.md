@@ -207,6 +207,25 @@ func setupAudio() throws {
 
 ---
 
+## Swift: AudioRoutePort
+
+```swift
+/// Reads the identity of the system's current audio output device.
+/// Application-facing: not injected into any service.
+public protocol AudioRoutePort: AnyObject {
+    /// The device the system would route new output to right now,
+    /// or nil when it cannot be determined. Never throws.
+    func currentOutputDevice() -> AudioOutputDevice?
+}
+```
+
+**Key Features:**
+- Snapshot query — stateless, nothing cached, no change observation
+- `nil` on any platform failure; the caller shows a generic prompt instead
+- Safe from any thread; NOT real-time safe (the CoreAudio HAL query can block)
+
+---
+
 ## Swift: TagReaderPort
 
 ```swift
@@ -460,6 +479,21 @@ audio->stop();
 
 ---
 
+## C++20: AudioRoutePort
+
+```cpp
+class AudioRoutePort {
+public:
+    virtual ~AudioRoutePort() = default;
+
+    /// The device the system would route new output to right now,
+    /// or std::nullopt when it cannot be determined. Never throws.
+    virtual std::optional<AudioOutputDevice> current_output_device() = 0;
+};
+```
+
+---
+
 ## C++20: TagReaderPort
 
 ```cpp
@@ -520,6 +554,7 @@ tag_writer->write("/path/to/audio.mp3", tags);
 | **TagReaderPort** | `protocol TagReaderPort: AnyObject` | `class TagReaderPort` | Read metadata |
 | **TagWriterPort** | `protocol TagWriterPort: AnyObject` | `class TagWriterPort` | Write metadata |
 | **EQPort** | `protocol EQPort: AnyObject` | *(deferred)* | Equalizer control surface |
+| **AudioRoutePort** | `protocol AudioRoutePort: AnyObject` | `class AudioRoutePort` | Current output device identity |
 
 ---
 
@@ -573,6 +608,7 @@ func stop()                 // ✅ Must NOT throw (spec requirement)
 | **AudioOutputPort** | `render()` MUST be real-time safe; `configure()`/`start()`/`stop()`/`flush()` MUST be internally serialized and callable from any non-real-time thread; `onInvalidated` fires on an implementation-owned thread |
 | **TagReaderPort** | MUST be safe to call from any thread concurrently |
 | **TagWriterPort** | MUST synchronize file writes if called concurrently |
+| **AudioRoutePort** | Safe from any thread (stateless); NOT real-time safe |
 
 ---
 

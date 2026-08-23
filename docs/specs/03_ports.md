@@ -270,6 +270,46 @@ contract built on this signal is specified in `04_services.md` §4.2.3.
 
 ---
 
+## AudioRoutePort
+
+Reads the identity of the audio output device the system currently routes sound to.
+
+This Port exists for the application layer, not for playback: after an output invalidation
+(see `AudioOutputPort`, *Output Invalidation*), an application typically wants to tell the
+user *where* sound would now go ("Continue on MacBook Pro Speakers?") before calling
+`play()`. HarmoniaCore itself never consumes this Port — `PlaybackService` does not depend
+on it (`04_services.md` §4.4), and no adapter changes its behaviour based on it.
+
+### Interface
+
+```text
+protocol AudioRoutePort {
+    currentOutputDevice() -> AudioOutputDevice?
+}
+```
+
+### Semantics
+
+**currentOutputDevice()**
+- Returns the device the *system* would route new audio output to at the moment of the call —
+  the system default output device / current route — as an `AudioOutputDevice`
+  (see `05_models.md`). It does NOT report any engine- or stream-specific selection.
+- Returns `nil` when the current device cannot be determined (no output device present,
+  query failure). MUST NOT throw: inability to name the device is not an error the caller
+  can act on.
+- The result is a snapshot; it can be stale by the time the caller uses it. Implementations
+  MUST NOT cache across calls — every call queries the platform.
+- This Port reports identity only. Observing *changes* to the route is not part of this
+  contract; the invalidation signal on `AudioOutputPort` covers the case playback cares
+  about.
+- Thread Safety: safe to call from any thread. NOT real-time safe (may call blocking
+  platform APIs) — MUST NOT be called from the render path.
+- **Parity note:** returned values are environment-dependent (they name whatever hardware
+  the host has), so this Port is excluded from cross-platform test vectors
+  (`07_api-parity.md` §7).
+
+---
+
 ## EQPort
 
 Provides the runtime control surface for an in-chain equaliser DSP node: enable / preamp / per-band gain. The Port is platform-agnostic and exposes no audio-engine types.

@@ -15,6 +15,7 @@ Linux adapters implement the same Ports using native libraries:
 | **TagReaderPort** | `TagLibTagReaderAdapter` | TagLib | Reads ID3, Vorbis, and MP4 metadata. |
 | **TagWriterPort** | `TagLibTagWriterAdapter` | TagLib | Writes common metadata tags. |
 | **MonotonicTimePort** | `SteadyClockAdapter` | std::chrono | Provides monotonic time for latency metrics. |
+| **AudioRoutePort** | `PipeWireRouteAdapter` | PipeWire | Reads the current default audio sink (id + name). |
 | **LoggerPort** | `SpdlogAdapter` | spdlog | Structured logging. |
 | **LoggerPort (fallback)** | `StdErrLogger` | iostream | Stderr fallback for environments without spdlog. |
 
@@ -187,6 +188,22 @@ default-sink change, a stream error, and PipeWire/ALSA server disconnection.
 - MUST NOT corrupt file if write fails
 - SHOULD create backup before write operation
 - MUST handle read-only files gracefully
+
+---
+
+### 2.10 PipeWireRouteAdapter : AudioRoutePort
+
+> **Status: Planned**  
+> Deferred with the rest of the Linux stack.
+
+- Reads the current default audio sink: the `default.audio.sink` entry of the PipeWire
+  metadata object, resolved to the sink node's identity.
+- `id` from the node's stable identity (`node.name`, falling back to `object.serial`);
+  `name` from `node.description`.
+- Returns `nil` (`std::nullopt`) when no sink exists or the server is unreachable; never
+  throws.
+- Stateless per call, thread-safe, not real-time safe — same contract as the Apple adapter
+  (`03_ports.md`, AudioRoutePort).
 
 ---
 

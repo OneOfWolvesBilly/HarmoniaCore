@@ -156,6 +156,27 @@ extension TagBundle {
 
 ---
 
+## Swift: AudioOutputDevice
+
+```swift
+/// Identity of the audio output device the system currently routes sound to.
+/// Produced by AudioRoutePort.currentOutputDevice(); consumed by the application layer.
+public struct AudioOutputDevice: Sendable, Equatable {
+    /// Stable, platform-defined unique identifier. Opaque — compare, never parse.
+    public let id: String
+
+    /// Human-readable device name for display. Not unique.
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+```
+
+---
+
 ## Swift: CoreError
 
 ```swift
@@ -312,6 +333,19 @@ struct TagBundle {
                !bpm && !replay_gain_track && !replay_gain_album &&
                !comment && !artwork_data;
     }
+};
+```
+
+---
+
+## C++20: AudioOutputDevice
+
+```cpp
+struct AudioOutputDevice {
+    std::string id;    // stable platform identifier; opaque
+    std::string name;  // display name; not unique
+
+    bool operator==(const AudioOutputDevice&) const = default;
 };
 ```
 

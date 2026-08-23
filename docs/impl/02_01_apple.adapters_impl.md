@@ -337,6 +337,59 @@ the default output volume; the service re-applies its remembered volume after ev
 
 ---
 
+## SystemAudioRouteAdapter : AudioRoutePort
+
+One stateless class, two platform paths. No AppKit / UIKit.
+
+```swift
+import Foundation
+#if os(macOS)
+import CoreAudio
+#else
+import AVFAudio
+#endif
+
+public final class SystemAudioRouteAdapter: AudioRoutePort {
+
+    public init() {}
+
+    public func currentOutputDevice() -> AudioOutputDevice? {
+        #if os(macOS)
+        // 1. System default output device.
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &address, 0, nil, &size, &deviceID) == noErr,
+              deviceID != kAudioObjectUnknown else { return nil }
+
+        // 2. UID (stable id) + 3. display name, both CFString properties.
+        guard let uid: String = stringProperty(deviceID, kAudioDevicePropertyDeviceUID),
+              let name: String = stringProperty(deviceID, kAudioObjectPropertyName)
+        else { return nil }
+        return AudioOutputDevice(id: uid, name: name)
+        #else
+        guard let port = AVAudioSession.sharedInstance()
+            .currentRoute.outputs.first else { return nil }
+        return AudioOutputDevice(id: port.uid, name: port.portName)
+        #endif
+    }
+}
+```
+
+**Notes:**
+- Stateless — no lock, no cache, no notification observer. Every call re-queries.
+- All failure paths collapse to `nil`; the adapter never throws.
+- The HAL query can block briefly; never call from the render path.
+- No mock exists for this adapter: no service consumes the Port, and its return values name
+  real hardware, so verification is manual (System Settings › Sound).
+
+---
+
 ## AVMetadataTagReaderAdapter : TagReaderPort
 
 Reads metadata using `AVAsset` APIs.
