@@ -91,7 +91,7 @@ swift test --parallel
 | LyricsLanguageVariant | LyricsLanguageVariantTests.swift | 10 | ✅ Complete |
 | CoreError | CoreErrorTests.swift | 14 | ✅ Complete |
 | **Services** | | | |
-| PlaybackService | DefaultPlaybackServiceTests.swift | 27 | ✅ Complete |
+| PlaybackService | DefaultPlaybackServiceTests.swift | 35 | ✅ Complete |
 | **Adapters** | | | |
 | AVAudioUnitEQAdapter | AVAudioUnitEQAdapterTests.swift | 6 | ✅ |
 | AVMetadataTagReaderAdapter | AVMetadataTagReaderAdapterTests.swift | 2 | ⚠️ Minimal |
@@ -101,7 +101,7 @@ swift test --parallel
 | **Test Infrastructure** | | | |
 | Mock Ports | TestSupport/*.swift | 6 mocks | ✅ Complete |
 
-**Total: 162 test functions**
+**Total: 170 test functions**
 
 ---
 
