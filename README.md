@@ -68,11 +68,11 @@ For the current inventory of ports, adapters, services, and models, see the corr
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/OneOfWolvesBilly/HarmoniaCore-Swift.git", from: "0.1.0")
+    .package(url: "https://github.com/OneOfWolvesBilly/HarmoniaCore-Swift.git", revision: "<tagged revision>")
 ]
 ```
 
-> `HarmoniaCore-Swift` is a standalone Swift Package extracted from `apple-swift/` via `git subtree split`. See [Related Projects](#related-projects) for the relationship between the two repositories.
+> `HarmoniaCore-Swift` is a standalone Swift Package extracted from `apple-swift/` via `git subtree split`. Its releases are tagged `vX.Y.Z-swift`; pin the tagged revision rather than a `from:` range (see [Versioning Policy](#versioning-policy)). See [Related Projects](#related-projects) for the relationship between the two repositories.
 
 **Requirements:**
 - Xcode 15.3+ (Xcode 26 beta supports Swift 6 strict concurrency)
@@ -148,20 +148,27 @@ For the full file listing of any sub-directory, see the corresponding specificat
 
 HarmoniaCore versioning is independent of any consumer application's release cadence. See [Versioning Policy](#versioning-policy) below.
 
-- **v0.1.x** — Swift reference, first stable API surface (current). PlaybackService, EQ, TagReader/Writer, and the full Apple adapter set.
-- **Minor bumps (0.2, 0.3, …)** — Triggered by additions to HarmoniaCore itself: new ports, new adapters, new services, or new models.
-- **Major bump (1.0)** — Cut when the API surface is judged ready for long-term backward-compatibility guarantees.
+- **Old line — v0.1.x** — Swift 5.9 language mode, macOS 13 / iOS 16. PlaybackService, EQ, TagReader/Writer, and the full Apple adapter set. Receives bug fixes only; no API additions. Anchored by `v0.1.1` (monorepo) / `v0.1.1-swift` (HarmoniaCore-Swift), the last revision before the Swift 6 baseline.
+- **New line — v0.2.x** — Swift 6 language mode and `Sendable` port contracts, macOS 15 / iOS 18. Baselined on `main` once the Swift 6 branch merges; `v0.2.0` is cut from that baseline.
+- **Package split (planned)** — Tag reading/writing and the shared foundation (logging, time, device route) move to sibling packages. Each package versions independently; the split specifications fix each package's first version before any code moves.
+- **v1.0** — Cut when the public API is judged ready for long-term backward-compatibility guarantees. Not before the synchronous port surface is redesigned.
 - **Linux C++20 parity** — Cross-platform implementation (Deferred).
 
 ### Versioning Policy
 
-HarmoniaCore follows its own versioning, decoupled from any consumer:
+Versions are per package and follow the package's **consumer-visible contract**: its public API declarations and the behaviour specified in `docs/specs`. The count of ports, adapters, services, or models is never the test.
 
-- **patch** — non-API bug fixes and doc corrections
-- **minor** — additive API changes (new port / adapter / service / model)
-- **major** — breaking API changes
+- **patch** — the contract is unchanged: bug fixes within specified behaviour, documentation, internal refactoring, dependency bumps that do not alter the package's own API.
+- **minor** — the contract grows: new public API, or new specified behaviour that existing callers can ignore.
+- **major** — the contract shrinks or changes: removed or renamed public API, a new requirement on a port protocol, a changed platform or language-mode floor, a behavioural change to specified semantics.
 
-Consumer applications and their feature tiers do not trigger HarmoniaCore version bumps.
+**While the major version is 0**, the minor digit plays the major role: breaking changes bump minor, additive changes and fixes bump patch. Standard semantics apply from 1.0.
+
+**Restructuring.** Moving a type between packages is not a feature. For the package it leaves, the move is breaking; for the package it enters, it is part of that package's first release or an addition, as that package's own specification states. A move that leaves consumer source unchanged (e.g. via a re-export) is not a bump driver for the consumer-facing package.
+
+Consumer applications, their release cadence, and their feature tiers do not trigger version bumps. `TagBundle.currentSchemaVersion` is a model-level schema marker, not the package version.
+
+**Tags.** The monorepo tags `vX.Y.Z`; HarmoniaCore-Swift, the subtree split of `apple-swift/`, tags the same release `vX.Y.Z-swift`. Pin by exact revision or tag: `from:` ranges do not resolve `-swift` tags, because the suffix is a pre-release identifier.
 
 ## Contributing
 
